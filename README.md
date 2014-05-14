@@ -15,7 +15,7 @@ Xia Li
 
 Uses:
 
-Leapmotion 
+Leapmotion
 Three.js
 others :)
 
