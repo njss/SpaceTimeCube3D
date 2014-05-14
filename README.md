@@ -1,7 +1,7 @@
 SpaceTimeCube3D
 ===============
 
-Web Visualization Tool.
+Web Visualization Tool (prototype only).
 It is an implementation of the paper on Multivariate Space-Time cubes. Please see:
 
 "NEW VIEWS ON MULTIVARIABLE SPATIO-TEMPORAL DATA: THE SPACE TIME CUBE EXPANDED"
@@ -20,6 +20,8 @@ Leapmotion
 Three.js
 
 others :)
+
+Plots can be made using particles...
 
 
 My contact: njssnjss@gmail.com
