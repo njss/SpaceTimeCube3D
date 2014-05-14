@@ -1,0 +1,52 @@
+{
+ "name": "Indicator",
+ "children": [
+    {
+     "name": "Time"
+    },
+    {
+     "name": "Agriculture",
+     "children": [
+      {"name": "Cereal production (metric tons)"},
+      {"name": "Crop production index (2004-2006 = 100)"},
+      {"name": "Food production index (2004-2006 = 100)"}
+     ]
+    },
+    {
+     "name": "Weather",
+     "children": [
+      {"name": "Country temperature maximum"},
+      {"name": "Country average temperature"},
+      {"name": "Country temperature minimum"}
+     ]
+    },
+    {
+     "name": "Population",
+     "children": [
+      {"name": "Population, total"}
+     ]
+    },
+    {
+     "name": "Pollution",
+     "children": [
+      {"name": "CO2 emissions (kt)"},
+      {"name": "CO2 emissions (metric tons per capita)"},
+      {"name": "CO2 intensity (kg per kg of oil equivalent energy use)"},
+      {"name": "PM10, country level (micrograms per cubic meter)"},
+      {"name": "Organic water pollutant (BOD) emissions (kg per day)"}
+     ]
+    },
+    {
+     "name": "Immigration",
+     "children": [
+      {"name": "Immigration in, female"},
+      {"name": "Immigration out, female"},
+      {"name": "Immigration in, male"},
+      {"name": "Immigration out, male"},
+      {"name": "Immigration in, total"},
+      {"name": "Immigration out, total"}
+     ]
+    }
+   ]
+}
+ 

@@ -1,0 +1,1012 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>three.js canvas - geometry - cube</title>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+		<style>
+			body {
+				font-family: Monospace;
+				background-color: #f0f0f0;
+				margin: 0px;
+				overflow: hidden;
+			}
+			
+			video{
+				
+				-webkit-transform: rotate(30deg);
+			}
+		</style>
+	</head>
+	<body>
+
+		<!--<div id="debugLeapMotion">WebSocket not connected</div>-->
+  		<canvas id="canvasLeapMotion"></canvas>
+
+ 		<script src="./js/jquery/jquery-1.8.3.js"></script>
+ 		
+ 		<script src="./leapjs/leap.js"></script>    
+		
+		<script src="./ThreeJS/build/three.min.js"></script>
+		<script type="text/javascript" src="./Physijs/physi.js"></script>
+
+		<script src="./ThreeJS//examples/js/libs/stats.min.js"></script>
+		<script src="./headtrackr/headtrackr.js"></script>   
+
+
+	
+		<script>
+
+			Physijs.scripts.worker = './Physijs/physijs_worker.js';
+			Physijs.scripts.ammo = './examples/js/ammo.js';
+
+			var container, stats,physics_stats;
+			
+			var camera, scene, renderer;
+			
+			var controls;
+			var objects = [], plane;
+			
+			
+			var offset = new THREE.Vector3();
+			
+			var OLD_INTERSECTED = null;
+			var INTERSECTED = null;
+			var SELECTED;
+			var line;
+			
+			var cube;
+			var movingCubePointerA = null;
+			var movingCubePointerB = null;
+			
+			var planeH, planeV, grid;
+			var cubeWidth = 400;
+			var cubeHeight = 350;
+			var cubeDepth = 400;
+			
+			var targetRotation = 0;
+			var targetRotationOnMouseDown = 0;
+			
+			var mouseX = 0;
+			var mouseXOnMouseDown = 0;
+			
+			var windowHalfX = window.innerWidth / 2;
+			var windowHalfY = window.innerHeight / 2;
+			var currentYear = 1960;
+			
+			//Leap Motion variables
+		    var fingers = {};
+		    var spheres = {};
+		    var fingers3D = {};
+		    var textureCube;
+		    
+		    
+		    //Video
+		    var hasUserMedia = navigator.webkitGetUserMedia ? true : false;
+		    
+		    //0 - no mirror, 1 - mirror, 2 - mirror from webcam
+			var mirror = 2;
+				
+			var videoTexture;
+			var video;
+			var urlPrefix	= "./skybox_images/bridge/";
+			
+			var canvasVideo = document.createElement('canvas'); 						
+			var contextVideo = canvasVideo.getContext('2d');
+			
+			var faceTrackingX;
+			var faceTrackingY;
+			var faceTrackingZ;
+			var faceTrackingAngle;
+			var headWidth;
+			var headHeight;
+			
+			
+			if (mirror == 2)
+			{
+				video = document.createElement('video');
+				video.width    = 220;
+				video.height   = 540;
+				video.autoplay = true;
+				//video.rotateY = Math.PI;
+				navigator.webkitGetUserMedia({video:true, audio:true},
+				   function(stream) {
+						video.src = window.webkitURL.createObjectURL(stream);
+					  }
+				);
+				
+				video.onplay = function() {
+					canvasVideo.width = video.videoWidth;
+            		canvasVideo.height = video.videoHeight;
+                	draw();
+        		};
+				
+				function draw() 
+				{
+			    	if(video.paused || video.ended) return false;
+			    	contextVideo.drawImage(video, 0, 0);
+			    	setTimeout(draw, 20);
+				}
+				
+				var htracker = new headtrackr.Tracker({altVideo : {"ogv" : "/media/facekat/nocamfallback.ogv", "mp4" : "/media/facekat/nocamfallback.mp4"}, smoothing : false, fadeVideo : true, ui : false});
+				htracker.init(video, canvasVideo);
+				htracker.start();
+				
+				document.addEventListener("facetrackingEvent", function(e) {
+					
+					faceTrackingX = e.x;
+					faceTrackingY = e.y;
+					faceTrackingZ = e.z;
+					faceTrackingAngle = e.angle;
+					headWidth = e.width;
+					headHeight = e.height;
+					
+	drawIdent(contextVideo, e.x, e.y, e.angle, e.width, e.height);
+}, false);
+
+document.addEventListener("headtrackingEvent", function(e) {
+	mouseX = e.x*20;
+	mouseY = -e.y*20;
+}, false);
+
+
+var drawIdent = function(cContext, x, y, angle, width, height) {
+
+	/*
+	// normalise values
+		x = (x/320)*canvasVideo.width;
+		y = (y/240)*canvasVideo.height;
+	
+		// flip horizontally
+		x = canvasVideo.width - x;
+	
+		// clean canvas
+		cContext.clearRect(0,0,canvasVideo.width,canvasVideo.height);
+	
+		// draw rectangle around canvas
+		cContext.strokeRect(0,0,canvasVideo.width,canvasVideo.height);
+	
+		// draw marker, from x,y position
+		cContext.beginPath();
+		cContext.moveTo(x-5,y);
+		cContext.lineTo(x+5,y);
+		cContext.closePath();
+		cContext.stroke();
+	
+		cContext.beginPath();
+		cContext.moveTo(x,y-5);
+		cContext.lineTo(x,y+5);
+		cContext.closePath();
+		cContext.stroke();*/
+		
+		
+			cContext.save();
+	cContext.translate(x, y)
+	cContext.rotate(angle - Math.PI/2);
+
+	cContext.strokeStyle	= '#00CC00';
+	cContext.strokeRect(-Math.floor(width/2), -Math.floor(height/2)
+			, width, height);
+	cContext.restore();
+	
+};
+
+				
+			}
+		
+				
+			
+		
+			init();
+			
+			function moveFinger(Finger, posX, posY, posZ, dirX, dirY, dirZ) 
+			{
+			    Finger.style.webkitTransform = "translateX("+posX+"px) translateY("+posY+"px) translateZ("+posZ+"px) rotateX("+dirX+"deg) rotateY(0deg) rotateZ("+dirZ+"deg)";
+			}
+			
+			function moveSphere(Sphere, posX, posY, posZ, rotX, rotY, rotZ) 
+			{
+				Sphere.style.webkitTransform = "translateX("+posX+"px) translateY("+posY+"px) translateZ("+posZ+"px) rotateX("+rotX+"deg) rotateY(0deg) rotateZ(0deg)";
+			}
+
+
+		
+
+			    		   
+		    function DrawCubeGrid(gridTypeHorizVert, mirror, targetCube, gridWidthOffset, gridWidth, gridHeight, horizLineSpace, horizNumberLines, vertLineSpace, vertNumberLines, geometryRotation, planeColor, planeOpacity, planePositionY, planePositionZ, gridColor, gridOpacity)
+		    {				
+				//Horizontal Grid
+				if (gridTypeHorizVert == 0)
+				{
+					// Plane Horizontal
+					var geometry = new THREE.PlaneGeometry( gridWidth, gridHeight );
+					geometry.applyMatrix( new THREE.Matrix4().makeRotationX( geometryRotation ) );
+					
+					if (mirror == 0 || mirror == 1)
+						var material = new THREE.MeshBasicMaterial( { color: planeColor, opacity: planeOpacity} );
+					else if (mirror == 2)
+						var material = new THREE.MeshBasicMaterial( { color: 0xe0e0e0,  opacity: planeOpacity, envMap: textureCube } );
+					
+					var plane = new THREE.Mesh( geometry, material );
+					plane.position.y = planePositionY - 3;
+					
+					plane.doubleSided = false;	
+					plane.receiveShadow = true;
+					plane.castShadow = true;
+					
+					targetCube.add( plane );
+													
+				
+					
+					// Horizontal Line Geometry
+					var horizLineGeometry = new THREE.Geometry();
+					horizLineGeometry.vertices.push( new THREE.Vertex( new THREE.Vector3( -(gridWidth/2), 0, 0 ) ) );
+					horizLineGeometry.vertices.push( new THREE.Vertex( new THREE.Vector3( gridWidth/2, 0, 0 ) ) );	
+									
+					// Vertical Line Geometry
+					var vertLineGeometry = new THREE.Geometry();
+					vertLineGeometry.vertices.push( new THREE.Vertex( new THREE.Vector3( 0, 0 , -gridHeight/2 ) ) );
+					vertLineGeometry.vertices.push( new THREE.Vertex( new THREE.Vector3( 0, 0 , gridHeight/2 ) ) );
+					
+					var material = new THREE.LineBasicMaterial( { color: gridColor, opacity: gridOpacity } );
+
+					for ( var i = 0; i <= horizNumberLines; i ++ ) 
+					{	
+						var line = new THREE.Line( horizLineGeometry, material );
+						line.position.z = ( i * horizLineSpace ) - gridWidth/2;
+						plane.add( line );
+					}
+					
+					for ( var i = 0; i <= vertNumberLines; i ++ ) 
+					{
+						var line = new THREE.Line( vertLineGeometry, material );
+						line.position.x = ( i * vertLineSpace ) - gridHeight/2;					
+						plane.add( line );
+					}					
+
+				}
+				else // Vertical Grid
+				{
+					if (mirror == 1)
+					{
+						// Plane Vertical
+						var geometry = new THREE.CubeGeometry( gridHeight, gridWidth, 1 );
+						geometry.applyMatrix( new THREE.Matrix4().makeRotationZ( geometryRotation ) );
+						
+						//var material = new THREE.MeshLambertMaterial( { color: planeColor, opacity: planeOpacity, side:THREE.DoubleSide } );
+		
+						var material = new THREE.MeshBasicMaterial( { color: 0xe0e0e0,  envMap: textureCube } );
+						plane = new THREE.Mesh( geometry, material );
+						plane.position.y = planePositionY;
+						plane.position.z = planePositionZ-(gridWidthOffset/2)-1;
+						plane.rotation.y = Math.PI;
+						
+						plane.doubleSided = false;	
+						//plane.receiveShadow = true;
+						plane.castShadow = true;
+						targetCube.add( plane );							
+					
+					}
+					else if (mirror == 2)
+					{
+						// Plane Vertical
+						var geometry = new THREE.CubeGeometry( gridWidth, gridHeight, 1 );
+						geometry.applyMatrix( new THREE.Matrix4().makeRotationZ( Math.PI ) );
+						
+						//var material = new THREE.MeshLambertMaterial( { color: planeColor, opacity: planeOpacity, side:THREE.DoubleSide } );
+		
+						videoTexture = new THREE.Texture( canvasVideo );											
+						
+						var material   = new THREE.MeshLambertMaterial(
+							{
+								  map : videoTexture
+							});
+							
+						
+						plane = new THREE.Mesh( geometry, material );
+						plane.position.y = planePositionY;
+						plane.position.z = planePositionZ - (gridWidthOffset / 2) - 1;
+						plane.rotation.x = -Math.PI;
+						
+						plane.doubleSided = false;	
+						//plane.receiveShadow = true;
+						plane.castShadow = true;
+						targetCube.add( plane );
+					}
+			
+										
+					// Plane Vertical
+					var geometry = new THREE.PlaneGeometry( gridHeight, gridWidth);
+					geometry.applyMatrix( new THREE.Matrix4().makeRotationZ( geometryRotation ) );
+					
+					var material = new THREE.MeshBasicMaterial( { color: planeColor, opacity: planeOpacity, side:THREE.DoubleSide } );
+	
+					
+					plane = new THREE.Mesh( geometry, material );
+					plane.position.y = planePositionY;
+					plane.position.z = planePositionZ-(gridWidthOffset/2);
+					//plane.rotation.y = Math.PI;
+					
+					plane.doubleSided = false;	
+					//plane.receiveShadow = true;
+					plane.castShadow = true;
+					targetCube.add( plane );
+											
+																																							
+					// Horizontal Line Geometry
+					var horizLineGeometry = new THREE.Geometry();
+					horizLineGeometry.vertices.push( new THREE.Vertex( new THREE.Vector3( -(gridWidth/2)  , 0, 0 ) ) );
+					horizLineGeometry.vertices.push( new THREE.Vertex( new THREE.Vector3( gridWidth/2 , 0, 0 ) ) );		
+								
+					// Vertical Line Geometry
+					var vertLineGeometry = new THREE.Geometry();
+					vertLineGeometry.vertices.push( new THREE.Vertex( new THREE.Vector3( 0, -gridHeight/2   , 0 ) ) );
+					vertLineGeometry.vertices.push( new THREE.Vertex( new THREE.Vector3( 0, gridHeight/2  , 0 ) ) );
+					
+					var material = new THREE.LineBasicMaterial( { color: gridColor, opacity: gridOpacity } );
+
+					for ( var i = 0; i <= horizNumberLines; i ++ ) 
+					{
+	
+						var line = new THREE.Line( horizLineGeometry, material );
+						line.position.y = ( i * horizLineSpace ) - gridHeight/2;
+						plane.add( line );
+					}
+					
+					for ( var i = 0; i <= vertNumberLines; i ++ ) 
+					{
+						var line = new THREE.Line( vertLineGeometry, material );
+						line.position.x = ( i * vertLineSpace ) - gridWidth/2;					
+						plane.add( line );
+					}										
+				}													    			    	
+		    }
+
+
+			function drawYearStackedCubes (numberCubes, cubesWidth, cubesHeight, cubesDepth, startPosition, cubesOpacity, cubeColor, separation)
+			{
+				for (j = 0; j < numberCubes; j++)
+				{
+					// Cube	
+					var geometry = new THREE.CubeGeometry( cubesWidth, cubesHeight, cubesDepth);
+	
+					for ( var i = 0; i < geometry.faces.length; i ++ ) 
+					{	
+						//geometry.faces[ i ].color.setHex( Math.random() * 0xffffff );	
+					}
+	
+					var material = new THREE.MeshLambertMaterial( { color:cubeColor , opacity: cubesOpacity, side:THREE.DoubleSide } );
+					//?
+					material.transparent = true;
+					
+					var stackedCube = new THREE.Mesh( geometry, material );
+					stackedCube.id = "year_" + (++currentYear);
+					stackedCube.doubleSided = true;
+					stackedCube.position.y = ( j * (cubesHeight + separation)) - startPosition/2 + cubesHeight/2; 
+					
+					//stackedCube.doubleSided = true;	
+					//stackedCube.receiveShadow = true;
+					//stackedCube.castShadow = true;
+					createText(stackedCube, currentYear-1, -(cubesHeight/2 + separation) - (cubesHeight/2), cubesWidth/2 - 65, cubeDepth);
+					//createText(stackedCube, stackedCube.id, -(cubesHeight/2 + separation) - (cubesHeight/2), cubesWidth/2 + 25);
+					
+					cube.add( stackedCube );					
+				}
+				
+			}
+			
+			function createText(target, text, startPosition, cubesCenter, cubeDepth) 
+			{
+				/////// draw text on canvas /////////
+
+				// create a canvas element
+				var canvas1 = document.createElement('canvas');
+				var context1 = canvas1.getContext('2d');
+				context1.font = "Bold 20px Arial";
+				context1.fillStyle = "rgba(228,192,5,0.95)";
+			    context1.fillText(text, 0, 30);
+			    
+			    
+				// canvas contents will be used for a texture
+				var texture1 = new THREE.Texture(canvas1) 
+				texture1.needsUpdate = true;
+			      
+			    var material1 = new THREE.MeshBasicMaterial( {map: texture1} );
+			    material1.transparent = true;
+			
+			
+			    var mesh1 = new THREE.Mesh(
+			        new THREE.PlaneGeometry(canvas1.width, canvas1.height),
+			        material1
+			      );
+				mesh1.position.set(cubesCenter, startPosition, cubeDepth /2);
+				//mesh1.rotation.x = -Math.PI/4;
+			    mesh1.doubleSided = true;													
+				
+				target.add(mesh1);				
+			}	
+
+
+			function init() 
+			{
+				container = document.createElement( 'div' );
+				document.body.appendChild( container );
+
+				var info = document.createElement( 'div' );
+				info.style.position = 'absolute';
+				info.style.top = '10px';
+				info.style.width = '100%';
+				info.style.textAlign = 'center';
+				info.innerHTML = 'Drag to spin the cube';
+				container.appendChild( info );
+
+
+				renderer = new THREE.WebGLRenderer({ antialias: true });
+				renderer.setSize( window.innerWidth, window.innerHeight );
+				renderer.shadowMapEnabled = true;
+				renderer.shadowMapSoft = true;				
+				container.appendChild( renderer.domElement );
+
+				stats = new Stats();
+				stats.domElement.style.position = 'absolute';
+				stats.domElement.style.top = '0px';
+				container.appendChild( stats.domElement );
+				
+				physics_stats = new Stats();
+				physics_stats.domElement.style.position = 'absolute';
+				physics_stats.domElement.style.top = '50px';
+				physics_stats.domElement.style.zIndex = 100;
+				container.appendChild( physics_stats.domElement );				
+
+
+
+				scene = new Physijs.Scene({ fixedTimeStep: 1 / 120 });
+				
+				scene.setGravity(new THREE.Vector3( 0, -30, 0 ));				
+					scene.addEventListener(
+						'update',
+						function() {
+	
+						scene.simulate( undefined, 1 );
+						physics_stats.update();
+					}
+				);
+
+
+				camera = new THREE.PerspectiveCamera(
+					70,
+					window.innerWidth / window.innerHeight,
+					1,
+					3000
+				);
+				
+				//camera.position.set( 25, 100, 1200 );
+				//camera.lookAt(new THREE.Vector3( 0, 3, 0 ));
+				
+				camera.position.y = 100;
+				camera.position.z = 1200;
+				
+				scene.add( camera );
+
+		
+
+				// ambient light
+				am_light = new THREE.AmbientLight( 0x444444 );
+				scene.add( am_light );
+		
+				// directional light
+				dir_light = new THREE.DirectionalLight( 0xFFFFFF );
+				dir_light.position.set( -200, 350, 0 );
+				dir_light.target.position.copy( scene.position );
+				dir_light.castShadow = true;
+				dir_light.shadowCameraLeft = -500;
+				
+				dir_light.shadowCameraTop = -500;
+				dir_light.shadowCameraRight = 500;
+				dir_light.shadowCameraBottom = 1500;
+				dir_light.shadowCameraNear = 20;
+				dir_light.shadowCameraFar = 800;
+				dir_light.shadowBias = -.001
+				dir_light.shadowMapWidth = dir_light.shadowMapHeight = 2048;
+				dir_light.shadowDarkness = .4;
+				scene.add( dir_light );
+				
+				/*
+				// Materials
+								table_material = Physijs.createMaterial(
+									new THREE.MeshLambertMaterial({ map: THREE.ImageUtils.loadTexture( './Physijs/examples/images/wood.jpg' ), ambient: 0xFFFFFF }),
+									.9, // high friction
+									.2 // low restitution
+								);*/
+				
+				
+					// Materials
+				table_material = Physijs.createMaterial(
+					new THREE.MeshLambertMaterial({ map: THREE.ImageUtils.loadTexture( urlPrefix + "negy.jpg" ), ambient: 0xFFFFFF }),
+					.9, // high friction
+					.2 // low restitution
+				);
+				table_material.map.wrapS = table_material.map.wrapT = THREE.RepeatWrapping;
+				//table_material.map.repeat.set( 5, 5 );
+				
+		/*
+				block_material = Physijs.createMaterial(
+							new THREE.MeshLambertMaterial({ map: THREE.ImageUtils.loadTexture( './Physijs/examples/images/plywood.jpg' ), ambient: 0xFFFFFF }),
+							.4, // medium friction
+							.4 // medium restitution
+						);
+						block_material.map.wrapS = block_material.map.wrapT = THREE.RepeatWrapping;
+						block_material.map.repeat.set( 1, .5 );		*/
+		
+
+				// Table
+				table = new Physijs.BoxMesh(
+					new THREE.CubeGeometry(1000, 1, 1000),
+					table_material,
+					0, // mass
+					{ restitution: .2, friction: .8 }
+				);
+				table.position.y = -350;
+				table.position.z = -200;
+				table.receiveShadow = true;
+				scene.add( table );		
+						
+						
+				
+				var urls = [ urlPrefix + "posx.jpg", urlPrefix + "negx.jpg",
+						urlPrefix + "posy.jpg", urlPrefix + "negy.jpg",
+						urlPrefix + "posz.jpg", urlPrefix + "negz.jpg" ];
+				textureCube	= THREE.ImageUtils.loadTextureCube( urls );
+				
+				
+				/*
+				//ball - cube reflection material:
+								var ball = new THREE.Mesh( new THREE.SphereGeometry( 100, 32, 200 ), new THREE.MeshBasicMaterial( { color: 0xffffff, envMap: textureCube } ) );
+								ball.position.x = 250;
+								ball.position.y = -260;
+								//ball.position.z = 200;
+								scene.add(ball);*/
+				
+				if (mirror != 0)
+				{
+				//init the cube shadder
+				var shader	= THREE.ShaderLib["cube"];
+				
+				shader.uniforms["tCube"].texture = textureCube;
+				var material = new THREE.ShaderMaterial({
+					fragmentShader	: shader.fragmentShader,
+					vertexShader	: shader.vertexShader,
+					uniforms	: shader.uniforms,
+					depthWrite: false,
+      				side: THREE.BackSide
+				});
+
+				 var skybox = new THREE.Mesh(new THREE.CubeGeometry(2000, 2000, 1000), material);
+			     scene.add(skybox);						
+						
+					}
+					
+				// Cube	
+				var geometry = new THREE.CubeGeometry( cubeWidth, 1, cubeDepth );
+
+				for ( var i = 0; i < geometry.faces.length; i ++ ) 
+				{	
+					geometry.faces[ i ].color.setHex( Math.random() * 0xffffff );	
+				}
+
+				var material = new THREE.MeshLambertMaterial( { vertexColors: THREE.FaceColors , opacity: 0.0 } );
+				//?
+				material.transparent = true;
+				
+				cube = new THREE.Mesh( geometry, material );
+				cube.id = "BigCube";
+				cube.position.y = 50;
+				cube.rotation.y = 0;
+				scene.add( cube );	
+		
+			
+				var numberStackedCubes = 11;
+				var stackedCubeHeight = 50;
+				var cubesSeparation = 10;
+				var startPosition = (stackedCubeHeight + cubesSeparation) *  numberStackedCubes;
+				
+			
+				
+				drawYearStackedCubes (numberStackedCubes, cubeWidth, stackedCubeHeight, cubeDepth, startPosition, 0.6, 0xe0e0e0, cubesSeparation);
+							
+			
+				var gridWidthOffset = 50;			
+				var gridWidth = cubeWidth + gridWidthOffset;
+				var gridHeight = startPosition + 50;
+				
+				//Horizontal Grid
+				DrawCubeGrid (0, mirror, cube, gridWidthOffset, gridWidth, gridWidth, gridWidth/(gridWidth/10), gridWidth/10, gridWidth/(gridWidth/10), gridWidth/10, - Math.PI / 2, 0x000000, 1.0, -gridHeight/2, 0, 0x000000, 0.3);
+				
+				//Vertical Grid
+				DrawCubeGrid (1, mirror, cube, gridWidthOffset, gridWidth, gridHeight, gridWidth/(gridWidth/10), gridHeight/10, gridWidth/(gridWidth/10), gridWidth/10, - Math.PI / 2, 0x000000, 1.0, 0, -cubeDepth/2, 0x000000, 0.3);
+										
+								
+			
+			/*
+				var planeGeo = new THREE.PlaneGeometry(600, 200, 10, 10);
+							var planeMat = new THREE.MeshLambertMaterial({color: 0xFFFFFF});
+							var planeGround = new THREE.Mesh(planeGeo, planeMat);
+							planeGround.applyMatrix( new THREE.Matrix4().makeRotationX( - Math.PI / 2 ) );
+							planeGround.position.y = -25;
+							planeGround.receiveShadow = true;
+							scene.add(planeGround);*/
+										
+										
+										
+										
+				
+
+				/*
+				renderer = new THREE.CanvasRenderer();
+								renderer.setSize( window.innerWidth, window.innerHeight );*/
+				
+
+				
+				
+		
+				/*
+				document.addEventListener( 'mousedown', onDocumentMouseDown, false );
+								document.addEventListener( 'touchstart', onDocumentTouchStart, false );
+								document.addEventListener( 'touchmove', onDocumentTouchMove, false );
+				*/
+				
+				//
+
+				window.addEventListener( 'resize', onWindowResize, false );
+				
+				
+
+			}
+
+			function onWindowResize() 
+			{
+
+				windowHalfX = window.innerWidth / 2;
+				windowHalfY = window.innerHeight / 2;
+
+				camera.aspect = window.innerWidth / window.innerHeight;
+				camera.updateProjectionMatrix();
+
+				renderer.setSize( window.innerWidth, window.innerHeight );
+
+			}
+
+
+
+		    Leap.loop(function(frame) 
+		    {
+			
+    			var fingerIds = {};
+				var handIds = {};
+				var str = "";
+				var n = str.split ('_');
+				
+				//timeout
+				var t;
+				
+			
+				
+			
+				if (mirror == 2)
+				{
+					if( video.readyState == video.HAVE_ENOUGH_DATA )
+					{
+						  videoTexture.needsUpdate = true;
+					}
+					
+					cube.rotation.y = -((faceTrackingX-20) * 0.05);
+					//camera.position.z = ( (-Math.floor(headWidth)) * (Math.floor(headHeight)) +3000 );
+					
+				}
+
+			    
+			    if (frame.hands == undefined ) 
+			    { 
+			      var handsLength = 0; 
+			    } 
+			    else 
+			    {
+			      var handsLength = frame.hands.length;
+			    }
+		
+			    for (var handId = 0, handCount = handsLength; handId != handCount; handId++) 
+			    {
+					var hand = frame.hands[handId];
+					var posX = (hand.palmPosition[0]*3);
+					var posY = (hand.palmPosition[2]*3)-300;
+					var posZ = (hand.palmPosition[1]*3);
+					var rotX = (hand.rotation[1][2]*90);
+					var rotY = (hand.rotation[1][1]*90);
+					var rotZ = (hand.rotation[1][0]*90);
+					var sphere = spheres[hand.id];
+				
+					//console.log(hand.rotation[1]);
+			    
+			    	if (!sphere) 
+			    	{
+	/*
+						var sphereDiv = document.getElementById("sphere").cloneNode(true);
+														 sphereDiv.setAttribute('id',hand.id);
+							sphereDiv.style.backgroundColor='#'+Math.floor(Math.random()*16777215).toString(16);
+														 document.getElementById('scene').appendChild(sphereDiv);*/
+	
+			        	
+			        	spheres[hand.id] = hand.id;
+			  		} 
+			  		else 
+			  		{
+			    	/*
+						var sphereDiv =  document.getElementById(hand.id);
+											if (typeof(sphereDiv)!= 'undefined' && sphereDiv != null) 
+											{
+												  moveSphere(sphereDiv, posX, posY, posZ, rotX, rotY, rotZ);
+											}*/
+					
+			  		}
+			  		handIds[hand.id] = true;
+				}
+				
+				for (handId in spheres) 
+				{
+		  			if (!handIds[handId]) 
+		  			{
+		    			/*
+						var sphereDiv =  document.getElementById(spheres[handId]);
+												sphereDiv.parentNode.removeChild(sphereDiv);*/
+						
+		    			delete spheres[handId];
+		  			}
+				}
+				
+				
+		
+				for (var pointableId = 0, pointableCount = frame.pointables.length; pointableId != pointableCount; pointableId++) 
+				{
+					var pointable = frame.pointables[pointableId];
+				  	var posX = (pointable.tipPosition[0]*3);
+				  	var posY = (pointable.tipPosition[1]*3)-400;
+				  	var posZ = (pointable.tipPosition[2]*3);
+				  	var dirX = -(pointable.direction[0]*Math.PI);
+				  	var dirY = -(pointable.direction[1]*-Math.PI);
+				  	var dirZ = (pointable.direction[2]*-Math.PI);
+				  	var finger = fingers[pointable.id];
+				  	
+		  			if (!finger) 
+		  			{
+		    			/*
+						var fingerDiv = document.getElementById("finger").cloneNode(true);
+												fingerDiv.setAttribute('id',pointable.id);
+												fingerDiv.style.backgroundColor='#' + Math.floor(Math.random()*16777215).toString(16);
+												document.getElementById('scene').appendChild(fingerDiv);*/
+						
+						//handle just one finger for now
+						//if (frame.pointables.length == 1 && movingCubePointerA == null)
+						{				
+
+							// Cube	
+							var geometry = new THREE.CubeGeometry( 25, 25, 50 );
+			
+							for ( var i = 0; i < geometry.faces.length; i ++ ) 
+							{	
+								geometry.faces[ i ].color.setHex(0xff0000);	
+							}
+			
+							var material = new THREE.MeshLambertMaterial( { vertexColors: THREE.FaceColors , opacity: 0.5 } );
+	
+							material.transparent = true;
+							
+							
+							var movingCubePointer = new THREE.Mesh( geometry, material );
+							movingCubePointer.id = pointable.id;							
+							scene.add( movingCubePointer );	
+							
+			        	
+			        		fingers[pointable.id] = pointable.id;
+			        		fingers3D[pointable.id] = movingCubePointer;
+			        		
+			        		//console.log(pointable.id);
+		        		}
+		  			} 
+		  			else 
+		  			{
+		    			/*
+						var fingerDiv =  document.getElementById(pointable.id);
+																								 if (typeof(fingerDiv) != 'undefined' && fingerDiv != null) 
+												{
+													  moveFinger(fingerDiv, posX, posY, posZ, dirX, dirY, dirZ);
+												}*/
+						if (fingers3D[pointable.id])
+						{
+							//probably not so fast...
+							//var posVector = new THREE.Vector3( posX, posY, posZ);
+							//var dirVector = new THREE.Vector3( dirX, dirZ, dirY);
+							
+							var movingCubePointer = fingers3D[pointable.id];
+							movingCubePointer.position.x = posX;
+							movingCubePointer.position.y = posY;
+							movingCubePointer.position.z = posZ;
+							
+							
+							movingCubePointer.rotation.x = dirY;
+							movingCubePointer.rotation.y = dirX;
+							movingCubePointer.rotation.Z = dirZ;
+							
+														
+
+							
+							/*
+							if (pointableId == 0 && frame.pointables.length == 1)
+														{
+															//cube.rotation.y = (posX - cube.rotation.y +50) * 0.008;
+														}*/
+							
+							if ((pointableId == 0 || pointableId == 1) && (frame.pointables.length == 1 || frame.pointables.length == 2))
+							{
+								var originPoint = movingCubePointer.position.clone();
+									
+								for (var vertexIndex = 0; vertexIndex < movingCubePointer.geometry.vertices.length; vertexIndex++)
+								{		
+									var localVertex = movingCubePointer.geometry.vertices[vertexIndex].clone();
+									var globalVertex = localVertex.applyMatrix4( movingCubePointer.matrix );
+									var directionVector = globalVertex.sub( movingCubePointer.position );
+									
+									var ray = new THREE.Raycaster( originPoint, directionVector.clone().normalize() );
+									var collisionResults = ray.intersectObjects( cube.children );
+									
+									if ( collisionResults.length > 0 && collisionResults[0].distance < directionVector.length() ) 
+									{
+										//appendText(" Hit ");
+										
+										
+										if ( INTERSECTED != collisionResults[ 0 ].object) 
+										{
+																																
+											//INTERSECTED = intersects[ 0 ].object;
+											if ( INTERSECTED ) 
+											{
+												str = INTERSECTED.id;
+												if (str.length>0)
+													n = str.split('_');
+												
+												if (n.length >0 && n[0]=="year")
+												{												
+													
+													INTERSECTED.material.emissive.setHex( INTERSECTED.currentHex );
+													
+													if (pointableId == 1 && frame.pointables.length == 2)
+													{	
+														t = setTimeout(
+															function()
+															{ 
+																
+																	//console.log("Cube:" + INTERSECTED.id + " was selected");
+																	INTERSECTED.material.emissive.setHex( INTERSECTED.currentHex );	
+																	INTERSECTED = null;
+																	str = "";																
+																	n = new Array();
+																 
+																
+															}
+														,5000);	
+													}	
+												}										
+											}
+													
+											INTERSECTED = collisionResults[ 0 ].object;
+											if (INTERSECTED)
+											{
+												str = INTERSECTED.id;
+												if (str.length>0)
+													n = str.split('_');
+												
+												console.log("teste: " + n[0]);
+												
+												if (n.length >0 && n[0]=="year")
+												{
+													INTERSECTED.currentHex = INTERSECTED.material.emissive.getHex();
+													INTERSECTED.material.emissive.setHex( 0xff0000 );
+												}
+											}
+											
+										}			
+									} 
+									else 
+									{
+									
+											
+										if ( INTERSECTED)
+										{
+											str = INTERSECTED.id;
+											if (str.length>0)
+												n = str.split('_');		
+																					
+											if (n.length >0 && n[0]=="year")
+											{
+												INTERSECTED.material.emissive.setHex( INTERSECTED.currentHex );
+												//console.log("Cube:" + INTERSECTED.id + " was de-selected");		
+											}
+										}
+										clearTimeout(t);
+										//INTERSECTED.position.z -=10;
+										INTERSECTED = null;	
+										str = "";
+										n = new Array();									
+									}							
+								}							
+							}
+							
+						
+							if (pointableId == 2 && frame.pointables.length == 3)
+							{
+								if (posY >=90 && posY<=600)
+								  cube.position.y = posY ;
+								  
+								if (posX >=-250 && posX<=250)
+								  cube.position.x = posX ;
+
+							}
+							else if (pointableId == 3 && frame.pointables.length == 4)
+							{
+								camera.position.z = posZ + 800;
+								
+							}
+							else if (pointableId == 4 && frame.pointables.length == 5)
+							{
+								cube.rotation.x = (posY - cube.rotation.x ) * 0.005;
+								
+							}
+							//console.log(posX);
+						}
+						
+		  			}
+		  			fingerIds[pointable.id] = true;
+				}
+		
+				for (fingerId in fingers) 
+				{
+		  			if (!fingerIds[fingerId]) 
+		  			{
+		    			/*
+						var fingerDiv =  document.getElementById(fingers[fingerId]);
+												fingerDiv.parentNode.removeChild(fingerDiv);*/
+						//if (movingCubePointerA != null && movingCubePointerA.id == fingerId)
+						{
+							scene.remove(fingers3D[fingerId]);
+							//movingCubePointerA = null;
+						}
+						
+		    			delete fingers[fingerId];
+		    			delete fingers3D[fingerId];
+		  			}
+				}
+				
+				/*
+				document.getElementById('showHands').addEventListener('mousedown', 
+									function() 
+									{
+										  document.getElementById('app').setAttribute('class','show-hands');
+									}, false
+								);
+						
+								document.getElementById('hideHands').addEventListener('mousedown', 
+									function() 
+									{
+										  document.getElementById('app').setAttribute('class','');
+									}, false
+								);*/
+				
+		    	
+		    	renderer.render( scene, camera );
+		    	//render(frame);
+		    	stats.update();
+		  	});		
+
+		</script>
+
+	</body>
+</html>

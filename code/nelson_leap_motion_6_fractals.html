@@ -1,0 +1,2945 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>three.js canvas - geometry - cube</title>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+		<style>
+			body 
+			{
+				font-family: Monospace;
+				background-color: #f0f0f0;
+				margin: 0px;
+				overflow: hidden;
+			}
+			
+			video
+			{				
+				-webkit-transform: rotate(30deg);
+			}
+
+		
+			#heatmapArea 
+			{						
+				width:400px;
+				height:400px;
+			}
+			
+			div.knob_Zoom
+			{				
+				display:none;
+				opacity:0.7;
+				position: absolute;
+				text-align: center; 
+				left: 88%;
+				top: 80%;
+				width: 280px; 
+				float: left;
+			}
+			
+			#gesturesInfo
+			{
+				display:none;
+				opacity:0.5;
+				position: absolute;
+				text-align: center; 
+				left: 88%;
+				top: 10%;
+				width: 280px; 
+				float: left;
+			}
+	
+
+		</style>
+		
+ 		<script src="./js/jquery/jquery-1.8.3.js"></script>
+		<script>
+           $(function($) {
+
+                $(".knob").knob({
+                    change : function (value) {
+                        //console.log("change : " + value);
+                    },
+                    release : function (value) {
+                        //console.log(this.$.attr('value'));
+                        //console.log("release : " + value);
+                    },
+                    cancel : function () {
+                        //console.log("cancel : ", this);
+                    },
+                    draw : function () {
+
+                        // "tron" case
+                        if(this.$.data('skin') == 'tron') {
+
+                            var a = this.angle(this.cv)  // Angle
+                                , sa = this.startAngle          // Previous start angle
+                                , sat = this.startAngle         // Start angle
+                                , ea                            // Previous end angle
+                                , eat = sat + a                 // End angle
+                                , r = 1;
+
+                            this.g.lineWidth = this.lineWidth;
+
+                            this.o.cursor
+                                && (sat = eat - 0.3)
+                                && (eat = eat + 0.3);
+
+                            if (this.o.displayPrevious) {
+                                ea = this.startAngle + this.angle(this.v);
+                                this.o.cursor
+                                    && (sa = ea - 0.3)
+                                    && (ea = ea + 0.3);
+                                this.g.beginPath();
+                                this.g.strokeStyle = this.pColor;
+                                this.g.arc(this.xy, this.xy, this.radius - this.lineWidth, sa, ea, false);
+                                this.g.stroke();
+                            }
+
+                            this.g.beginPath();
+                            this.g.strokeStyle = r ? this.o.fgColor : this.fgColor ;
+                            this.g.arc(this.xy, this.xy, this.radius - this.lineWidth, sat, eat, false);
+                            this.g.stroke();
+
+                            this.g.lineWidth = 2;
+                            this.g.beginPath();
+                            this.g.strokeStyle = this.o.fgColor;
+                            this.g.arc( this.xy, this.xy, this.radius - this.lineWidth + 1 + this.lineWidth * 2 / 3, 0, 2 * Math.PI, false);
+                            this.g.stroke();
+
+                            return false;
+                        }
+                    }
+                });
+
+                // Example of infinite knob, iPod click wheel
+                var v, up=0,down=0,i=0
+                    ,$idir = $("div.idir")
+                    ,$ival = $("div.ival")
+                    ,incr = function() { i++; $idir.show().html("+").fadeOut(); $ival.html(i); }
+                    ,decr = function() { i--; $idir.show().html("-").fadeOut(); $ival.html(i); };
+                $("input.infinite").knob(
+                                    {
+                                    min : 0
+                                    , max : 20
+                                    , stopper : false
+                                    , change : function () {
+                                                    if(v > this.cv){
+                                                        if(up){
+                                                            decr();
+                                                            up=0;
+                                                        }else{up=1;down=0;}
+                                                    } else {
+                                                        if(v < this.cv){
+                                                            if(down){
+                                                                incr();
+                                                                down=0;
+                                                            }else{down=1;up=0;}
+                                                        }
+                                                    }
+                                                    v = this.cv;
+                                                }
+                                    });
+            });                
+			
+			
+		</script>
+			
+		
+	</head>
+	<body>
+
+        <div id="zoomKnobDiv" class="knob_Zoom">
+            <input id="zoomKnob" class="knob" data-angleOffset=90 data-fgColor="#ffCC00" data-linecap=round value="0">
+        </div>
+        
+        <div id="gesturesInfo">
+        	<object id="gestureImageInfo" data="./skybox_images/AuxImages/HandGestures/hand_1_finger_pointing_orange_masterfile_edited.jpg" type="image/jpg"></object>
+        </div>
+		<!--<div id="debugLeapMotion">WebSocket not connected</div>-->
+  		<!--<canvas id="canvasLeapMotion"></canvas>-->
+
+ 		
+ 		<script src="./leapjs/leap.js"></script>    
+		
+		<script src="./ThreeJS/build/three.min.js"></script>
+		<script type="text/javascript" src="./Physijs/physi.js"></script>
+
+		<script src="./ThreeJS//examples/js/libs/stats.min.js"></script>
+		<script src="./headtrackr/headtrackr.js"></script>
+		<script type="text/javascript" src="./heatmapJS/src/heatmap.js"></script>
+		<script src="JQueryKnob/js/jquery.knob.js"></script>
+		
+
+
+	<script type="x-shader/x-vertex" id="vertexshader">
+
+			uniform float amplitude;
+			attribute float size;
+			attribute vec3 customColor;
+
+			varying vec3 vColor;
+
+			void main() {
+
+				vColor = customColor;
+
+				vec4 mvPosition = modelViewMatrix * vec4( position, 1.0 );
+
+				//gl_PointSize = size;
+				gl_PointSize = size * ( 300.0 / length( mvPosition.xyz ) );
+
+				gl_Position = projectionMatrix * mvPosition;
+
+			}
+
+		</script>
+
+		<script type="x-shader/x-fragment" id="fragmentshader">
+
+			uniform vec3 color;
+			uniform sampler2D texture;
+
+			varying vec3 vColor;
+
+			void main() {
+
+				gl_FragColor = vec4( color * vColor, 1.0 );
+				gl_FragColor = gl_FragColor * texture2D( texture, gl_PointCoord );
+
+			}
+
+		</script>
+		
+	
+		<script>
+
+			Physijs.scripts.worker = './Physijs/physijs_worker.js';
+			Physijs.scripts.ammo = './examples/js/ammo.js';
+
+			var container, stats,physics_stats;
+			
+			var camera, scene, renderer;
+			
+			var controls;
+			var objects = [], plane;
+			
+			
+			var offset = new THREE.Vector3();
+			
+			var OLD_INTERSECTED = null;
+			var INTERSECTED = null;
+			var SELECTED;
+			var line;
+			
+			var cube;
+			var movingCubePointerA = null;
+			var movingCubePointerB = null;
+			
+			var planeH, planeV, grid;
+	
+			
+			var targetRotation = 0;
+			var targetRotationOnMouseDown = 0;
+			
+			var mouseX = 0;
+			var mouseXOnMouseDown = 0;
+			
+			var windowHalfX = window.innerWidth / 2;
+			var windowHalfY = window.innerHeight / 2;
+			
+			
+			//Leap Motion variables
+		    var fingers = {};
+		    var spheres = {};
+		    var fingers3D = {};
+		    var textureCube;
+		    
+	    	var numberYears = 10;		
+	    	var numberVariables = 5;		
+			var numberStackedCubes = 1;
+			var cubesSeparation = 0;
+			
+			var cubeWidth = 800;
+			var cubeHeight = 50 * (numberYears);
+			var cubeDepth = 800;
+		    
+		    
+		    //Video
+		    var hasUserMedia = navigator.webkitGetUserMedia ? true : false;
+		    
+		    //0 - no mirror, 1 - mirror, 2 - mirror from webcam
+			var mirror = 1;
+				
+			var videoTexture;
+			var video;
+			var urlPrefix	= "./skybox_images/Park3Med/";
+			
+			var canvasVideo = document.createElement('canvas'); 						
+			var contextVideo = canvasVideo.getContext('2d');
+			
+			var faceTrackingX;
+			var faceTrackingY;
+			var faceTrackingZ;
+			var faceTrackingAngle;
+			var headWidth;
+			var headHeight;
+			
+			//Sounds
+			var sound1, sound2;
+			var soundEnabled = true;
+						
+			var Sound = function ( sources, radius, cameraFinalPosition, volume ) 
+			{
+
+				var audio = document.createElement( 'audio' );
+	
+				for ( var i = 0; i < sources.length; i ++ ) {
+	
+					var source = document.createElement( 'source' );
+					source.src = sources[ i ];
+	
+					audio.appendChild( source );
+	
+				}
+	
+				this.position = new THREE.Vector3();
+	
+				this.play = function () {
+	
+					audio.play();
+	
+				}
+	
+				this.update = function ( camera ) {
+	
+					var distance = this.position.distanceTo( camera.position) - cameraFinalPosition;
+					console.log('sound camera distance: ' + camera.position.z + ' sound radius : ' + radius);
+	
+					if ( distance <= radius ) {
+	
+						audio.volume = volume * ( 1 - (distance) / radius );
+	
+					} else {
+	
+						audio.volume = 0;
+	
+					}
+					console.log('audio volume ' + audio.volume);
+				}
+				
+				this.updateZoom = function ( zoom ) {
+	
+					audio.volume = (zoom*1)/100;
+					console.log(audio.volume + " zoom: " + zoom);
+	
+				}
+			}
+			
+			//Gestures
+			var showGesturesInfo = true;
+			
+			//Shader Attributes Plot3DParticlesLine
+			var attributes = {	
+					size: {	type: 'f', value: [] },
+					customColor: { type: 'c', value: [] }	
+				};
+				
+				
+			var attributesCountry = new Array();
+			var attributesCountryMesh = new Array();
+			
+			var attributesPlot2 = {	
+				size: {	type: 'f', value: [] },
+				customColor: { type: 'c', value: [] }	
+			};
+			
+    	
+    	//****************temp************  
+        //allways keep the variable localData = false
+        var localData = true;
+        //var localData = false;
+        var realData = true;
+        var mode = 0;
+        
+        var curX = 0;
+        var curY = "CO2I";
+        
+        var minX = 0;
+        var maxX = 600;
+        var rangeMinX;
+        var rangeMaxX;
+        var t = null;
+        
+        //****************Variables************  
+        
+        //Countries to be passed by the user
+         var countriesNames = new Array(); 
+         
+        
+         countriesNames = ["SGP", 
+                             "MEX",
+                            "AUS",
+                            "PCN",
+                            "WLF",
+                            "GBR"];
+
+/*
+ 		 countriesNames = ["SGP", 
+                             "MEX",
+                            "AUS",
+                            "PCN"                            
+                            ];        
+*/
+         
+         //countriesNames = ["SGP", "MEX"];     
+         
+         var indicatorsList = new Array();
+         
+         indicatorsList = ["CO2I", "POPL", "CO2P", "TAVG", "TMAX", "TMIN"];
+                            
+       
+         /*indicatorsList = ["CO2I", 
+                                    "POPL",
+                                   "CO2P",
+                                   "TAVG",
+                                   "TMAX"];    */
+                               
+         
+        /*
+         indicatorsList = ["CO2I", 
+                             "POPL",
+                            "CO2P",
+                            "TAVG",
+                            "TMAX"];*/
+        
+                    
+        //Contains all the values for y Axis by Country
+        var yValues = new Array();   
+        
+        //The year to be passed by the TimePlayer   
+        var playerCurrentYear = 1980;	
+        
+        //Contains all possible Years
+        var yearsMiliseconds = new Array();
+        var years = new Array(); 	
+        //Controls the play Timer
+        var myVarTimer = null;
+            
+        //Counter for Function that allows to create the drag and drop menu circles		 	
+        var circleCounter = 1;
+        
+        var targetYear;
+        var yeartoday;
+        var monthtoday;
+        var dayofmonthtoday;
+        var xSelected = 0;
+        var ySelected = 0;
+            
+        //Data variables
+        var jsonData; //raw data retrived from qt
+        var yearInit = 1980;
+        var yearEnd = 1990;
+        var range = yearEnd - yearInit + 1;
+        
+        var seriesData = new Array();
+        
+        for (i=0;i<countriesNames.length;i++)
+        {                
+            seriesData[i] = new Array();   
+            
+            //one shader for each country
+            attributesCountry[i] = new Array();
+            attributesCountry[i] = {size: {	type: 'f', value: [] }, customColor: { type: 'c', value: [] } };
+            
+            attributesCountryMesh[i] = new Array();
+            attributesCountryMesh[i] = {size: {	type: 'f', value: [] }, customColor: { type: 'c', value: [] } };
+                         
+        }               
+        
+        var packedData = new Array();
+               
+        //var palette = ["#412554","#4C4D63","#537891","#719765","#F8EB39","#D5B22B","#DB8828","#DA4D27","#C82128","#7A1516"];
+        //var palette = ["#719765","#F8EB39","#D5B22B","#DB8828","#DA4D27","#C82128","#7A1516","#412554","#4C4D63","#537891"];
+        var palette = ["#E20009","#6CB302","#0027D1","#D10088","#D18100","#00CAD1","#D1D1D1","#5D006C","#D14F17","#C8D117"];
+        
+        //Variable for Generating a new color and Store it
+        var colorHexString;
+                        
+        var xAxis;
+        var yAxis;
+        
+        var scalingX = false;
+        
+        //toogle x axis: 0-time, 1-indicator	
+        //var xAxisToogle = 1;
+
+		//Chen Kan should create a new json file and put this data on the QT C++ part (future improvements)
+  		var indicatorsNames = [
+        	{
+        		"shortName" : "POPL",  // First element
+            	"longName"  : "Total Population"},
+            {
+            	"shortName" : "CERL",  // First element
+            	"longName"  : "Cereal Production (Metric Tons)"},
+            {
+            	"shortName" : "CRPI",  // First element
+            	"longName"  : "Crop Production Index (%)"},
+            {
+            	"shortName" : "FOPI",  // First element
+            	"longName"  : "Food Production Index (%)"},
+            {
+            	"shortName" : "CO2E",  // First element
+            	"longName"  : "CO2 Emissions (kt)"},
+            {
+            	"shortName" : "CO2P",  // First element
+            	"longName"  : "CO2 Emissions (metric tons p/ capita)"},
+            {
+            	"shortName" : "CO2I",  // First element
+            	"longName"  : "CO2 Intensity (kg)"},
+            {
+            	"shortName" : "PM10",  // First element
+            	"longName"  : "PM10 Country (micrograms p/ cubic m)"},
+            {
+            	"shortName" : "WBOD",  // First element
+            	"longName"  : "Organic Watter Poluttant (kg p/ day)"},
+            {
+            	"shortName" : "IMIF",  // First element
+            	"longName"  : "Immigration in (Female)"},
+            {
+            	"shortName" : "IMOF",  // First element
+            	"longName"  : "Immigration out (Female)"},
+            {
+            	"shortName" : "IMIM",  // First element
+            	"longName"  : "Immigration in (Male)"},
+            {
+            	"shortName" : "IMOM",  // First element
+            	"longName"  : "Immigration out (Male)"},
+			{
+				"shortName" : "IMIT",  // First element
+            	"Name"  : "Immigration in (Total)"},
+            {
+            	"shortName" : "IMOT",  // First element
+            	"longName"  : "Immigration out (Total)"},
+            {
+            	"shortName" : "TAVG",  // First element
+            	"longName"  : "Country Average Temperature (C)"},
+            {
+            	"shortName" : "TMAX",  // First element
+            	"longName"  : "Country Temperature Maximum (C)"},
+            {
+            	"shortName" : "TMIN",  // First element
+            	"longName"  : "Country Temperature Minimum (C)"}];
+        
+
+	      	//Gets the Indicator descriptive name for the labels on the graph
+	        function getIndicatorName(indicator)
+	        {
+	        	
+	        	for (i=0;i<indicatorsNames.length;i++)
+	        	{        		        	
+	        		if (indicatorsNames[i].shortName==indicator)
+	        		{        			
+	        			return indicatorsNames[i].longName;
+	        		}        		
+	        	}
+	        	return "Description Not Available";        	 
+	        }
+	            
+	        //Updates the X Axis of the Graph
+	        function updateIndicatorX(indicatorX)
+	        {
+	            scalingX = false;            
+	            
+	            curX = indicatorX;               
+	            if (countriesNames.length!=0)
+	            {
+	                packData();
+	                fillData();                        
+	            }
+	            	            
+	            changeMode((indicatorX==0)?0:1);
+	        }
+            
+	        //Updates the Y Axis of the Graph   
+	        function updateIndicatorY(indicatorY)
+	        {
+	            scalingX = false;
+	            
+	            curY = indicatorY;      
+	            
+	            if (countriesNames.length!=0)
+	            {
+	                packData();
+	                fillData();                                          
+	            }         
+	        }
+	        
+	        //Function to update the displayed year
+	        function updateYear()
+	        { 
+	            scalingX = false;
+	            
+	            getYear();	            
+	            
+	        	if (countriesNames.length!=0)
+	           	{            
+	           		packData(curX, curY);
+	            	fillData();	          
+	            }    
+	        }
+	
+	        //Update the Country List
+	        function updateCountryList(countryList)
+	        {
+	            scalingX = false;
+	            
+	            countriesNames = [];
+	                        	//alert(countryList.length);
+	            countriesNames = countryList;
+	            
+	            //alert('y: ' + countriesNames.length);
+	            if (countriesNames.length!=0)
+	            {      
+	            	packData();
+	            	fillData();
+	            
+	            	updateIndicatorX(curX);
+	       			updateIndicatorY(curY);	       	
+	       		}	       
+	        }
+	   
+	        //Function do get all the data
+	        function getData()
+	        {	    	
+	            //the json object from qt
+	            //For now it contains all the data
+	            //var entireData;
+	            if (localData)
+	            {
+	                jsonData = (function () {
+		                var jsonData = null;
+		                
+		                $.ajax({
+		                    'async': false,
+		                    'global': false,
+		                    'url': "./data/data.json",
+		                    'dataType': "json",
+		                    'success': function (data) {
+		                        jsonData = data;
+		                    }
+	                	});
+	                
+	                	return jsonData;
+	                })();
+	            }
+	            else
+	            {                  	         
+	                jsonData = parent.myData;	
+	                
+	                if (jsonData==null) 
+	                {
+	                	
+	                	alert('no real data!');                	
+	                }           
+	                     
+	            }
+	            
+	            var numberCountries = countriesNames.length;   
+	
+	            getYear();
+	        }
+	
+			//Gets the year value
+	        function getYear()
+	        {
+	            years = [];
+	            
+	            var yearCounter = yearInit;
+	            
+	            for (i = 0; i < range; i++)
+	            {			
+	                targetYear = new Date();	
+	                targetYear.setUTCFullYear(yearCounter);
+	                yeartoday = targetYear.getUTCFullYear();
+	                monthtoday = targetYear.getUTCMonth();
+	                dayofmonthtoday = targetYear.getUTCDate();
+	                
+	                yearsMiliseconds[i] = Date.UTC(yeartoday, monthtoday, dayofmonthtoday)/1000;	
+	                years[i] = yearCounter;	
+	                ++yearCounter;
+	            }    
+	        }
+	            
+	        //Packs all the Series data for the Graph
+	        function packData()
+	        {        
+	            var countNames = 0;
+	            
+	            seriesData = []
+	            
+	            //empty the packing
+	            for (countNames = 0; countNames < countriesNames.length; countNames++)
+	            {
+	                seriesData[countNames] = [];                
+	            }     
+	            
+	            var countCountries = 0;
+	            var countYears = 0;  
+	            
+	            switch (curX) 
+	            {
+	            	case 0: //x = Time             			            		           
+	           		    countCountries = 0;
+	           		    
+		                seriesData.forEach(             
+	                    function(series) 
+	                    {	                    	
+		                    for (indicatorPos = 0; indicatorPos< indicatorsList.length; indicatorPos++)
+		                    {
+		                    	curY = indicatorsList[indicatorPos];
+		                    	
+		                       for (countYears=0; countYears<years.length; countYears++) 
+		                       {
+		                            var value;					
+		                            //Change Random	
+		                            if(realData)
+		                            {
+		                                var coValue = jsonData[countriesNames[countCountries]];
+		                                if(coValue!=null)
+		                                {
+		                                    if(coValue[curY])
+		                                    {
+		                                        value = coValue[curY][years[countYears]];
+		                                    }
+		                                    else
+		                                    {
+		                                        value = 0;
+		                                    }
+		                                }
+		
+		                                if(value==null)
+		                                	value = 0;
+		                            }
+		                            else
+		                            {
+		                                //Nelson Y random data
+		                                var value = Math.random() * 2000;	
+		                            }                                                        
+		                            series.push( { indicator: indicatorsList[indicatorPos], x: years[countYears], y: value});
+		                        }	
+	                        }	
+	                        countCountries++;
+	                    }); 
+	                    break;	
+	            }//end of switch
+	        }
+	         
+	        function fillData() 
+	        {							
+	            packedData.length = 0;
+	            
+	            var length = Math.min(seriesData.length, countriesNames.length);
+	                
+	            for (i = 0; i < length; i++) 
+	            {				
+	                colorHexString = palette[i];	
+	                                                                                    
+	                packedData.push({color: colorHexString,
+	                    data: seriesData[i],
+	                    name: countriesNames[i]
+	                });											
+	            }	            	       
+	        }            
+   	
+			
+			if (mirror == 2)
+			{
+				video = document.createElement('video');
+				video.width    = 220;
+				video.height   = 540;
+				video.autoplay = true;
+				//video.rotateY = Math.PI;
+				navigator.webkitGetUserMedia({video:true, audio:true},
+				   function(stream) {
+						video.src = window.webkitURL.createObjectURL(stream);
+					  }
+				);
+				
+				video.onplay = function() {
+					canvasVideo.width = video.videoWidth;
+            		canvasVideo.height = video.videoHeight;
+                	draw();
+        		};
+				
+				function draw() 
+				{
+			    	if(video.paused || video.ended) return false;
+			    	contextVideo.drawImage(video, 0, 0);
+			    	setTimeout(draw, 20);
+				}
+				
+				
+				//TODO: change the default video
+				var htracker = new headtrackr.Tracker({altVideo : {"ogv" : "/media/facekat/nocamfallback.ogv", "mp4" : "/media/facekat/nocamfallback.mp4"}, smoothing : false, fadeVideo : true, ui : false});
+				htracker.init(video, canvasVideo);
+				htracker.start();
+				
+				document.addEventListener("facetrackingEvent", function(e) 
+				{
+					
+					faceTrackingX = e.x;
+					faceTrackingY = e.y;
+					faceTrackingZ = e.z;
+					faceTrackingAngle = e.angle;
+					headWidth = e.width;
+					headHeight = e.height;
+									
+					drawIdent(contextVideo, e.x, e.y, e.angle, e.width, e.height);
+				}, false);
+				
+/*
+				document.addEventListener("headtrackingEvent", function(e) 
+				{
+					mouseX = e.x*20;
+					mouseY = -e.y*20;
+				}, false);*/
+
+
+
+				var drawIdent = function(cContext, x, y, angle, width, height) 
+				{
+				
+					/*
+					// normalise values
+					x = (x/320)*canvasVideo.width;
+					y = (y/240)*canvasVideo.height;
+				
+					// flip horizontally
+					x = canvasVideo.width - x;
+				
+					// clean canvas
+					cContext.clearRect(0,0,canvasVideo.width,canvasVideo.height);
+				
+					// draw rectangle around canvas
+					cContext.strokeRect(0,0,canvasVideo.width,canvasVideo.height);
+				
+					// draw marker, from x,y position
+					cContext.beginPath();
+					cContext.moveTo(x-5,y);
+					cContext.lineTo(x+5,y);
+					cContext.closePath();
+					cContext.stroke();
+				
+					cContext.beginPath();
+					cContext.moveTo(x,y-5);
+					cContext.lineTo(x,y+5);
+					cContext.closePath();
+					cContext.stroke();
+					*/
+						
+						
+					cContext.save();
+					cContext.translate(x, y)
+					cContext.rotate(angle - Math.PI/2);
+				
+					cContext.strokeStyle = '#00CC00';
+					cContext.strokeRect(-Math.floor(width/2), -Math.floor(height/2), width, height);
+					cContext.restore();					
+				}
+				
+			}
+		
+  
+		
+			init();
+			
+			function moveFinger(Finger, posX, posY, posZ, dirX, dirY, dirZ) 
+			{
+			    Finger.style.webkitTransform = "translateX("+posX+"px) translateY("+posY+"px) translateZ("+posZ+"px) rotateX("+dirX+"deg) rotateY(0deg) rotateZ("+dirZ+"deg)";
+			}
+			
+			function moveSphere(Sphere, posX, posY, posZ, rotX, rotY, rotZ) 
+			{
+				Sphere.style.webkitTransform = "translateX("+posX+"px) translateY("+posY+"px) translateZ("+posZ+"px) rotateX("+rotX+"deg) rotateY(0deg) rotateZ(0deg)";
+			}
+		
+			    		   
+		    function DrawCubeGrid(gridTypeHorizVert, mirror, targetCube, gridWidthOffset, gridWidth, gridHeight, horizLineSpace, horizNumberLines, vertLineSpace, vertNumberLines, geometryRotation, planeColor, planeOpacity, planePositionY, planePositionZ, gridColor, gridOpacity, drawText, startVertTextPosition)
+		    {				
+				//Horizontal Grid
+				if (gridTypeHorizVert == 0)
+				{
+					// Plane Horizontal
+					var geometry = new THREE.PlaneGeometry( gridWidth, gridHeight );
+					geometry.applyMatrix( new THREE.Matrix4().makeRotationX( geometryRotation ) );
+					
+					if (mirror == 0 || mirror == 1)
+						var material = new THREE.MeshBasicMaterial( { color: planeColor, opacity: planeOpacity} );
+					else if (mirror == 2)
+						var material = new THREE.MeshBasicMaterial( { color: 0xe0e0e0,  opacity: planeOpacity, envMap: textureCube } );
+					
+					var plane = new THREE.Mesh( geometry, material );
+					plane.position.y = planePositionY - 3;
+					
+					plane.doubleSided = false;	
+					plane.receiveShadow = true;
+					plane.castShadow = true;
+					
+					targetCube.add( plane );									
+													
+					
+					// Horizontal Line Geometry
+					var horizLineGeometry = new THREE.Geometry();
+					horizLineGeometry.vertices.push( new THREE.Vertex( new THREE.Vector3( -(gridWidth/2), 0, 0 ) ) );
+					horizLineGeometry.vertices.push( new THREE.Vertex( new THREE.Vector3( gridWidth/2, 0, 0 ) ) );	
+									
+					// Vertical Line Geometry
+					var vertLineGeometry = new THREE.Geometry();
+					vertLineGeometry.vertices.push( new THREE.Vertex( new THREE.Vector3( 0, 0 , -gridHeight/2 ) ) );
+					vertLineGeometry.vertices.push( new THREE.Vertex( new THREE.Vector3( 0, 0 , gridHeight/2 ) ) );
+					
+					var material = new THREE.LineBasicMaterial( { color: gridColor, opacity: gridOpacity } );
+
+					for ( var i = 0; i <= horizNumberLines; i ++ ) 
+					{	
+						var line = new THREE.Line( horizLineGeometry, material );
+						line.position.z = ( i * horizLineSpace ) - gridWidth/2 + 80;
+						plane.add( line );
+						
+						if (drawText == 1)
+						{		
+							createText(plane, indicatorsList[i], -(gridWidth/2 - 160),  0, ( (i-1) * horizLineSpace ) - 200, -Math.PI/2, 0, 0);									
+							//createText(plane, playerCurrentYear + i, -(gridWidth/2 + 25),  0, ( (i-1) * horizLineSpace ) - 150, -Math.PI/2, 0, -Math.PI/2);						
+						}	
+						
+					}
+					
+					for ( var i = 0; i <= vertNumberLines + 1; i ++ ) 
+					{
+						var line = new THREE.Line( vertLineGeometry, material );
+						line.position.x = ( i * vertLineSpace ) - gridHeight/2;					
+						plane.add( line );
+						
+						if (drawText == 1 && i <= vertNumberLines)
+						{	
+							//createText(plane, "V_" + i, ( i * vertLineSpace ) - gridHeight/2 + 200, 0,  (gridHeight/2 - 15), -Math.PI/2, 0, 0);
+							createText(plane, playerCurrentYear + i, ( i * vertLineSpace ) - gridHeight/2 + 210, 0,  (gridHeight/2), -Math.PI/2, 0, 0);
+						}
+					}					
+
+				}
+				else // Vertical Grid
+				{
+					if (mirror == 1)
+					{
+						// Plane Vertical
+						var geometry = new THREE.CubeGeometry( gridHeight, gridWidth, 1 );
+						geometry.applyMatrix( new THREE.Matrix4().makeRotationZ( geometryRotation ) );
+						
+						//var material = new THREE.MeshLambertMaterial( { color: planeColor, opacity: planeOpacity, side:THREE.DoubleSide } );
+		
+						var material = new THREE.MeshBasicMaterial( { color: 0xe0e0e0,  envMap: textureCube } );
+						plane = new THREE.Mesh( geometry, material );
+						plane.position.y = planePositionY;
+						plane.position.z = planePositionZ-(gridWidthOffset/2)-1;
+						plane.rotation.y = Math.PI;
+						
+						plane.doubleSided = false;	
+						//plane.receiveShadow = true;
+						plane.castShadow = true;
+						targetCube.add( plane );							
+					
+					}
+					else if (mirror == 2)
+					{
+						// Plane Vertical
+						var geometry = new THREE.CubeGeometry( gridWidth, gridHeight, 1 );
+						geometry.applyMatrix( new THREE.Matrix4().makeRotationZ( Math.PI ) );
+						
+						//var material = new THREE.MeshLambertMaterial( { color: planeColor, opacity: planeOpacity, side:THREE.DoubleSide } );
+		
+						videoTexture = new THREE.Texture( canvasVideo );											
+						
+						var material   = new THREE.MeshLambertMaterial({ map : videoTexture});
+							
+						
+						plane = new THREE.Mesh( geometry, material );
+						plane.position.y = planePositionY;
+						plane.position.z = planePositionZ - (gridWidthOffset / 2) - 1;
+						plane.rotation.x = -Math.PI;
+						
+						plane.doubleSided = true;	
+						//plane.receiveShadow = true;
+						plane.castShadow = true;
+						targetCube.add( plane );
+					}
+			
+										
+					// Plane Vertical
+					var geometry = new THREE.PlaneGeometry( gridHeight, gridWidth);
+					geometry.applyMatrix( new THREE.Matrix4().makeRotationZ( geometryRotation ) );
+					
+					var material = new THREE.MeshBasicMaterial( { color: planeColor, opacity: planeOpacity, side:THREE.DoubleSide } );
+	
+					
+					plane = new THREE.Mesh( geometry, material );
+					plane.position.y = planePositionY;
+					plane.position.z = planePositionZ-(gridWidthOffset/2);
+					//plane.rotation.y = Math.PI;
+					
+					plane.doubleSided = false;	
+					//plane.receiveShadow = true;
+					plane.castShadow = true;
+					targetCube.add( plane );
+											
+																																							
+					// Horizontal Line Geometry
+					var horizLineGeometry = new THREE.Geometry();
+					horizLineGeometry.vertices.push( new THREE.Vertex( new THREE.Vector3( -(gridWidth/2)  , 0, 0 ) ) );
+					horizLineGeometry.vertices.push( new THREE.Vertex( new THREE.Vector3( gridWidth/2 , 0, 0 ) ) );		
+								
+					// Vertical Line Geometry
+					var vertLineGeometry = new THREE.Geometry();
+					vertLineGeometry.vertices.push( new THREE.Vertex( new THREE.Vector3( 0, -gridHeight/2   , 0 ) ) );
+					vertLineGeometry.vertices.push( new THREE.Vertex( new THREE.Vector3( 0, gridHeight/2  , 0 ) ) );
+					
+					var material = new THREE.LineBasicMaterial( { color: gridColor, opacity: gridOpacity } );
+
+
+					for ( var i = 0; i < horizNumberLines; i ++ ) 
+					{
+	
+						var line = new THREE.Line( horizLineGeometry, material );
+						line.position.y = (i * horizLineSpace ) + startVertTextPosition;
+						plane.add( line );
+						
+
+						
+						//createHeatMap (plane, ( (i-1) * horizLineSpace ) + startVertTextPosition + 12, 2);			
+					}
+					
+					for ( var i = 0; i <= vertNumberLines + 1; i ++ ) 
+					{
+						var line = new THREE.Line( vertLineGeometry, material );
+						line.position.x = ( i * vertLineSpace ) - gridWidth/2;					
+						plane.add( line );	
+						
+						if (drawText == 1 && i <= vertNumberLines)
+						{
+							createText(plane, "Mv_" + i, ( i * vertLineSpace ) - gridWidth/2 + 200, cubeHeight/2 - 41, 2, 0, 0, 0);
+							createText(plane, "mv_" + i, ( i * vertLineSpace ) - gridWidth/2 + 200, -gridHeight/2 - 15, 2, 0, 0, 0);
+
+						}							
+											
+					}										
+				}													    			    	
+		    }
+
+
+			function drawFrame(canvas)
+			{
+				
+				setTimeout( drawFrame, 1 );
+			}
+
+
+	
+
+
+			function drawYearStackedCubes (numberCubes, cubesWidth, cubesHeight, cubesDepth, startPosition, cubesOpacity, cubeColor, separation)
+			{
+				for (j = 0; j < numberCubes; j++)
+				{
+										
+					
+					// Cube	
+					var geometry = new THREE.CubeGeometry( cubesWidth, cubesHeight, cubesDepth);
+	
+		/*
+					for ( var i = 0; i < geometry.faces.length; i ++ ) 
+					{	
+						geometry.faces[ i ].color.setHex( Math.random() * 0xffffff );	
+					}
+			*/
+		
+					var material = new THREE.MeshLambertMaterial( { color:cubeColor , opacity: cubesOpacity, side:THREE.DoubleSide } );
+					//?
+					material.transparent = true;
+					
+					var stackedCube = new THREE.Mesh( geometry, material );
+					stackedCube.id = "year_" + (playerCurrentYear + j);
+					stackedCube.doubleSided = true;
+					stackedCube.position.y = ( j * (cubesHeight + separation)) - startPosition/2 + cubesHeight/2; 
+					
+					//stackedCube.doubleSided = true;	
+					//stackedCube.receiveShadow = true;
+					//stackedCube.castShadow = true;
+					//createText(stackedCube, playerCurrentYear-1, -(cubesHeight/2 + separation) - (cubesHeight/2), cubesWidth/2 - 65, cubeDepth);
+					
+					
+					cube.add( stackedCube );	
+					
+				                    
+	                										
+				}
+				
+			}
+			
+			
+			function createHeatMap(target, text, posX, posY, posZ, cubesWidth, cubesDepth)
+			{				
+				var heatmapDiv = document.createElement("div");
+					
+				heatmapDiv.id = "heatmapArea";
+				
+				 				
+		  		//heatmapDiv.width = cubesWidth;
+		       	//heatmapDiv.height = cubesDepth;
+		       	
+		       	//heatmapDiv.setAttribute('style', 'width:' + cubesWidth + 'px');
+		       	//heatmapDiv.setAttribute('style', 'height:' + cubesDepth +'px ');
+		       	
+		       	document.body.appendChild(heatmapDiv);
+		       	
+				/*
+				var context1 = heatmapCanvas.getContext('2d');
+									context1.font = "Bold 20px Arial";
+									context1.fillStyle = "rgba(228,192,5,0.95)";
+									context1.fillText("text", 0, 30);*/
+				
+			
+				 // heatmap configuration
+			    var config = {
+			        element: heatmapDiv,
+			        radius: 25,
+			        //opacity: 100,
+			        visible: true,
+			        legend: {
+			            position: 'canvas',
+			            title: 'Example Distribution'
+			        }   
+			    };
+			
+				//var xx = h337.create({"element":heatmapDiv, "radius":25, "visible":true});																								
+				var xx = h337.create(config);
+				
+				// let's get some data
+			    var data = {
+			        max: 200000,
+			        data: [
+			            { x: 10, y: 20, count: 18 },
+			            { x: 125, y: 125, count: 100000 },
+			            { x: 50, y: 30, count: 200000 },
+			             { x: 45, y: 25, count: 200000 }
+			            // ...
+				        ]
+				    };
+ 
+    				//xx.store.setDataSet(data);
+				
+							
+				xx.store.generateRandomDataSet(100);
+							
+				var heatmapCanvas = document.getElementById("canvas");
+				
+				
+				var context1 = heatmapCanvas.getContext('2d');
+				context1.font = "Bold 20px Arial";
+				context1.fillStyle = "rgba(228,192,5,0.95)";
+		    	context1.fillText(text, 0, 30);
+				
+			/*
+				if(div.length) {
+									alert(div.width);
+									var heatmapCanvas = div.find('canvas');
+								}	*/
+							
+				
+				//alert (heatmapCanvas.getAttribute("z-index"));
+				/*
+				var context1 = heatmapCanvas.getContext('2d');
+									context1.font = "Bold 20px Arial";
+									context1.fillStyle = "rgba(228,192,5,0.95)";
+									context1.fillText(text, 0, 30);*/								   
+    
+                //document.body.appendChild(heatmap.canvas);
+                
+				// canvas contents will be used for a texture
+				var texture1 = new THREE.Texture(heatmapCanvas) 
+				texture1.needsUpdate = true;
+			      
+			    var material1 = new THREE.MeshBasicMaterial( {map: texture1} );
+			    //material1.transparent = true;
+				
+				//alert(heatmapCanvas.width);
+		
+			    var mesh1 = new THREE.Mesh(
+			        new THREE.CubeGeometry(cubesWidth, cubesDepth, 1),
+			        material1
+			      );
+			      
+				mesh1.position.y = posY;
+				mesh1.rotation.x = -Math.PI/2;
+			    mesh1.doubleSided = true;													
+				
+				target.add(mesh1);	
+				
+				//comment out to see the 2D canvas heatmap
+				document.body.removeChild(heatmapDiv);					
+				
+			}
+			
+			function createText(target, text, posX, posY, posZ, rotX, rotY, rotZ) 
+			{
+				/////// draw text on canvas /////////
+
+				// create a canvas element
+				var canvas1 = document.createElement('canvas');
+				var context1 = canvas1.getContext('2d');
+				context1.font = "Bold 20px Arial";
+				context1.fillStyle = "rgba(228,192,5,0.95)";
+			    context1.fillText(text, 0, 30);
+			    
+			    
+				// canvas contents will be used for a texture
+				var texture1 = new THREE.Texture(canvas1) 
+				texture1.needsUpdate = true;
+			      
+			    var material1 = new THREE.MeshBasicMaterial( {map: texture1} );
+			    material1.transparent = true;
+			
+			
+			    var mesh1 = new THREE.Mesh(
+			        new THREE.PlaneGeometry(canvas1.width, canvas1.height),
+			        material1
+			      );
+				mesh1.position.set(posX, posY, posZ);
+				mesh1.rotation.set(rotX, rotY, rotZ);
+				//mesh1.rotation.x = -Math.PI/4;
+			    mesh1.doubleSided = true;													
+				
+				target.add(mesh1);				
+			}	
+			
+
+
+
+			//Particles Plot Functions				
+
+		
+			function AddCube3DPoint(xValue, yValue, zValue, targetArray, xMin, yMin, zMin, xMax, yMax, zMax)
+			{				
+				var x = rangeValues(xMin, xMax, -cubeWidth/2, cubeWidth/2, xValue);				
+				var y = rangeValues(yMin, yMax, -cubeHeight/2, cubeHeight/2, yValue);
+				var z = rangeValues(zMin, zMax, -cubeDepth/2, cubeDepth/2, zValue);		
+				
+				targetArray.push( new THREE.Vector3(x, y, z));
+				
+				return targetArray;
+			}
+			
+
+		
+			function Plot3DParticlesMesh(target, shaderAttributes, pointsArray, pointsColor, plotSize, numberPoints, transparent, depthTest, numberSepPoints)
+			{				
+				var spline = new THREE.SplineCurve3(pointsArray);		
+					
+				uniforms = {
+	
+					amplitude: { type: "f", value: 1.0 },
+					color:     { type: "c", value: new THREE.Color( 0xffffff ) },
+					texture:   { type: "t", value: THREE.ImageUtils.loadTexture( "./ThreeJS/examples/textures/sprites/spark1.png" ) },
+				};
+	
+				var shaderMaterial = new THREE.ShaderMaterial( {
+	
+					uniforms: 		uniforms,
+					attributes:     shaderAttributes,
+					vertexShader:   document.getElementById( 'vertexshader' ).textContent,
+					fragmentShader: document.getElementById( 'fragmentshader' ).textContent,
+	
+					blending: 		THREE.AdditiveBlending,
+					depthTest: 		depthTest,
+					transparent:	transparent	
+				});		
+				
+				
+		
+					
+
+				
+				var geometry = new THREE.Geometry();
+	
+		
+				
+				
+						for (i = 0; i < pointsArray.length - numberSepPoints -1; i++)
+						{
+								if (((i+1)%(numberSepPoints)!= 0) || i ==0)
+								{
+									var pointsArrayAux = new Array();
+									
+									pointsArrayAux.push(pointsArray[i + 1]);
+									pointsArrayAux.push(pointsArray[i]);
+									
+									var spline = new THREE.SplineCurve3(pointsArrayAux);
+										
+									var splinePoints = spline.getPoints(numberPoints);
+								
+									for(var j = 0; j < splinePoints.length; j++)
+									{
+										geometry.vertices.push(splinePoints[j]);  
+										
+									}
+									
+									
+									pointsArrayAux.push(pointsArray[i]);
+									pointsArrayAux.push(pointsArray[(i) + numberSepPoints]);
+									var spline = new THREE.SplineCurve3(pointsArrayAux);
+										
+									var splinePoints = spline.getPoints(numberPoints);
+								
+									for(var j = 0; j < splinePoints.length; j++)
+									{
+										geometry.vertices.push(splinePoints[j]);  
+										
+									}
+									
+									pointsArrayAux.push(pointsArray[(i) + numberSepPoints]);
+									pointsArrayAux.push(pointsArray[(i + 1) + numberSepPoints]);
+									var spline = new THREE.SplineCurve3(pointsArrayAux);
+										
+									var splinePoints = spline.getPoints(numberPoints);
+								
+									for(var j = 0; j < splinePoints.length; j++)
+									{
+										geometry.vertices.push(splinePoints[j]);  
+										
+									}
+									
+									
+									pointsArrayAux.push(pointsArray[(i + 1) + numberSepPoints]);
+									pointsArrayAux.push(pointsArray[i + 1]);
+									var spline = new THREE.SplineCurve3(pointsArrayAux);
+										
+									var splinePoints = spline.getPoints(numberPoints);
+								
+									for(var j = 0; j < splinePoints.length; j++)
+									{
+										geometry.vertices.push(splinePoints[j]);  
+										
+									}
+									//pointsArrayAux.push(pointsArray[i + 1]);
+										
+								
+									
+								
+									
+									
+									
+									
+								}									
+							}
+		
+						
+						
+		
+			/*
+				
+							geometry.vertices = pointsArray;
+							
+							
+							
+							
+				
+							for (i = 0; i < pointsArray.length - numberSepPoints -1; i++)
+								{
+									if (((i+1)%(numberSepPoints)!= 0) || i ==0)
+									{
+										geometry.faces.push( new THREE.Face4( i + 1, i, (i) + numberSepPoints, (i + 1) + numberSepPoints) );
+										console.log("P0: " + (i + 1) + " P1: " + i + " P2: " + ((i) + numberSepPoints) + " P3: " + ((i + 1) + numberSepPoints) + " i: " + i + " numberSepPoints: " + numberSepPoints);
+									}
+									else
+									{
+										console.log(">>> " + i);
+									}
+												
+								}
+								
+								
+								geometry.computeFaceNormals();*/
+			
+	
+				
+			
+				
+				
+				
+				
+				//geometry2.vertices = geometry.vertices;			
+/*
+				
+		var sprite = THREE.ImageUtils.loadTexture( "./sprayGeometryJS/Example/disc.png" );
+	mat = new THREE.ParticleBasicMaterial( { size: 2, map: sprite, blending: THREE.AdditiveBlending, depthTest: false, transparent : true} );
+	mat.color.setHSV( 0.65, 0.7, 0.6 );*/
+
+	
+	
+			
+				
+				var object = new THREE.Mesh( geometry, new THREE.MeshBasicMaterial( { vertexColors: THREE.FaceColors, color: pointsColor, opacity: 1.0, side:THREE.DoubleSide} ) );				
+				object.doubleSided = true;
+
+
+				THREE.GeometryUtils.merge(geometry, object);
+				var geometry2 = geometry.clone();
+		
+				particlesMesh = new THREE.ParticleSystem( geometry, shaderMaterial );	
+				particlesMesh.dynamic = true;		
+				
+				var vertices = particlesMesh.geometry.vertices;
+				
+				var values_size = shaderAttributes.size.value;
+				var values_color = shaderAttributes.customColor.value;				
+				
+				for( var v = 0; v < vertices.length; v++ ) 
+				{	
+					values_size[ v ] = plotSize;
+					values_color[ v ] = new THREE.Color( pointsColor );	
+				}
+						
+						
+						
+			
+				target.add(particlesMesh);	
+				
+				//target.add(object);
+											
+			}
+			
+			
+		
+			
+			function Plot3DParticlesLine(target, shaderAttributes, pointsArray, pointsColor, plotSize, numberPoints)
+			{
+				// smooth my curve over this many points
+				//var numPoints = 100;
+				
+				var spline = new THREE.SplineCurve3(pointsArray);
+				
+				var material = new THREE.LineBasicMaterial({
+				    color: 0xff00f0,
+				});
+				
+				uniforms = {
+	
+					amplitude: { type: "f", value: 1.0 },
+					color:     { type: "c", value: new THREE.Color( 0xffffff ) },
+					texture:   { type: "t", value: THREE.ImageUtils.loadTexture( "./ThreeJS/examples/textures/sprites/spark1.png" ) },
+	
+				};
+	
+				var shaderMaterial = new THREE.ShaderMaterial( {
+	
+					uniforms: 		uniforms,
+					attributes:     shaderAttributes,
+					vertexShader:   document.getElementById( 'vertexshader' ).textContent,
+					fragmentShader: document.getElementById( 'fragmentshader' ).textContent,
+	
+					blending: 		THREE.AdditiveBlending,
+					depthTest: 		false,
+					transparent:	true
+	
+				});						
+	
+				
+				var geometry = new THREE.Geometry();
+				var splinePoints = spline.getPoints(numberPoints);
+				
+				for(var i = 0; i < splinePoints.length; i++){
+				    geometry.vertices.push(splinePoints[i]);  
+				}
+				
+				particlesLine = new THREE.ParticleSystem( geometry, shaderMaterial );
+	
+				particlesLine.dynamic = true;		
+				
+				var vertices = particlesLine.geometry.vertices;
+				
+				var values_size = shaderAttributes.size.value;
+				var values_color = shaderAttributes.customColor.value;					
+				
+				
+				for( var v = 0; v < vertices.length; v++ ) 
+				{	
+					values_size[ v ] = plotSize;
+					values_color[ v ] = new THREE.Color( pointsColor );
+	
+					//if ( vertices[ v ].y < 0 )
+						//values_color[ v ].setHSV( 0.5 + 0.1 * ( v / vertices.length ), 0.7, 0.9 );
+					//else
+						//values_color[ v ].setHSV( 0.0 + 0.1 * ( v / vertices.length ), 0.9, 0.9 );
+				}				
+				
+				//var line = new THREE.Line(geometry, material);
+				
+				target.add(particlesLine);				
+			}
+
+		
+			//Normal Plot Functions (Splines and Meshes)		
+			function Plot3DLine(target, pointsArray, pointsColor, plotSize, numberPoints)
+			{
+				// smooth my curve over this many points
+				//var numPoints = 100;
+				
+				spline = new THREE.SplineCurve3(pointsArray);
+				
+				var material = new THREE.LineBasicMaterial({
+				    color: pointsColor,
+				});
+				
+						
+				var geometry = new THREE.Geometry();
+				var splinePoints = spline.getPoints(numberPoints);
+				
+				for(var i = 0; i < splinePoints.length; i++){
+				    geometry.vertices.push(splinePoints[i]);  
+				}
+				
+				var line = new THREE.Line(geometry, material);
+				
+				target.add(line);				
+			}		
+		
+			function Plot3DMesh(target, pointsArray, pointsColor, plotSize, numberPoints, numberSepPoints)
+			{	
+				var geometry = new THREE.Geometry();
+				
+				geometry.vertices = pointsArray;
+				
+				
+				for (i = 0; i < pointsArray.length - numberSepPoints -1; i++)
+				{
+					if (((i+1)%(numberSepPoints)!= 0) || i ==0)
+					{
+						geometry.faces.push( new THREE.Face4( i + 1, i, (i) + numberSepPoints, (i + 1) + numberSepPoints) );
+					}
+								
+				}
+				
+				geometry.computeFaceNormals();
+				
+				var object = new THREE.Mesh( geometry, new THREE.MeshBasicMaterial( { vertexColors: THREE.FaceColors, color: pointsColor, opacity: 1.0, side:THREE.DoubleSide} ) );
+				object.doubleSided = true;
+
+				target.add(object);											
+			}		
+						
+				
+			function init() 
+			{
+				//--------------------------------------------------------
+				// Data from CEBiT 
+				//--------------------------------------------------------
+				
+	      		//get all data
+	            getData();		
+	            
+	            //init packing
+	            packData();
+	            
+	            //init fill
+	            fillData();      				
+								
+				
+				//--------------------------------------------------------
+				// WebGL Part
+				//--------------------------------------------------------
+				
+				container = document.createElement( 'div' );
+				document.body.appendChild( container );
+
+				var info = document.createElement( 'div' );
+				info.style.position = 'absolute';
+				info.style.top = '10px';
+				info.style.width = '100%';
+				info.style.textAlign = 'center';
+				info.innerHTML = 'Drag to spin the cube';
+				//container.appendChild( info );
+
+
+				renderer = new THREE.WebGLRenderer({ antialias: true });
+				
+				renderer.setClearColorHex(0xEEEEEE, 1.0);
+      			//renderer.shadowMapEnabled = true;
+      			renderer.shadowMapWidth = 1024;
+     			renderer.shadowMapHeight = 1024;
+      			renderer.shadowCameraFov = 35;
+      			
+      			
+      			//testing
+      			renderer.gammaInput = true;
+				renderer.gammaOutput = true;
+				renderer.physicallyBasedShading = true;
+				//
+				renderer.shadowMapEnabled = true;
+				renderer.shadowMapType = THREE.PCFShadowMap;
+
+				
+				renderer.setSize( window.innerWidth, window.innerHeight );
+				//renderer.shadowMapEnabled = true;
+				renderer.shadowMapSoft = true;				
+				container.appendChild( renderer.domElement );
+
+				stats = new Stats();
+				stats.domElement.style.position = 'absolute';
+				stats.domElement.style.top = '0px';
+				stats.domElement.style.opacity = "0.5";
+				
+				container.appendChild( stats.domElement );
+				
+				physics_stats = new Stats();
+				physics_stats.domElement.style.position = 'absolute';
+				physics_stats.domElement.style.top = '50px';
+				physics_stats.domElement.style.zIndex = 100;
+				physics_stats.domElement.style.opacity = "0.5";
+				container.appendChild( physics_stats.domElement );				
+
+
+				scene = new Physijs.Scene({ fixedTimeStep: 1 / 120 });
+				
+				scene.setGravity(new THREE.Vector3( 0, -30, 0 ));				
+					scene.addEventListener(
+						'update',
+						function() {
+	
+						scene.simulate( undefined, 1 );
+						physics_stats.update();
+					}
+				);
+
+
+				camera = new THREE.PerspectiveCamera(
+					70,
+					window.innerWidth / window.innerHeight,
+					1,
+					3000
+				);
+				
+				//camera.position.set( 25, 100, 1200 );
+				//camera.lookAt(new THREE.Vector3( 0, 3, 0 ));
+				
+				camera.position.y = 100;
+				camera.position.z = 1200;
+				
+				scene.add( camera );
+
+		
+			    var light = new THREE.SpotLight();
+			    light.castShadow = true;
+			    light.position.set( -170, 300, 100 );
+			    scene.add(light);
+
+   
+
+
+				// ambient light
+				am_light = new THREE.AmbientLight( 0x444444 );
+				scene.add( am_light );
+		
+				// directional light
+				dir_light = new THREE.DirectionalLight( 0xFFFFFF );
+				dir_light.position.set( -200, 350, 0 );
+				dir_light.target.position.copy( scene.position );
+				dir_light.castShadow = true;
+				dir_light.shadowCameraLeft = -500;
+				
+				dir_light.shadowCameraTop = -500;
+				dir_light.shadowCameraRight = 1000;
+				dir_light.shadowCameraBottom = 1500;
+				dir_light.shadowCameraNear = 20;
+				dir_light.shadowCameraFar = 800;
+				dir_light.shadowBias = -.001
+				dir_light.shadowMapWidth = dir_light.shadowMapHeight = 2048;
+				dir_light.shadowDarkness = 1.0;
+				scene.add( dir_light );
+				
+				
+			
+				
+				
+				/*
+				// Materials
+								table_material = Physijs.createMaterial(
+									new THREE.MeshLambertMaterial({ map: THREE.ImageUtils.loadTexture( './Physijs/examples/images/wood.jpg' ), ambient: 0xFFFFFF }),
+									.9, // high friction
+									.2 // low restitution
+								);*/
+				
+				
+				// Materials
+				table_material = Physijs.createMaterial(
+					new THREE.MeshLambertMaterial({ map: THREE.ImageUtils.loadTexture( urlPrefix + "negy.jpg" ), ambient: 0xFFFFFF, opacity:0.1}),
+					.9, // high friction
+					.2 // low restitution
+				);
+				table_material.map.wrapS = table_material.map.wrapT = THREE.RepeatWrapping;
+				table_material.transparent = true;
+				//table_material.map.repeat.set( 5, 5 );
+				
+		/*
+				block_material = Physijs.createMaterial(
+							new THREE.MeshLambertMaterial({ map: THREE.ImageUtils.loadTexture( './Physijs/examples/images/plywood.jpg' ), ambient: 0xFFFFFF }),
+							.4, // medium friction
+							.4 // medium restitution
+						);
+						block_material.map.wrapS = block_material.map.wrapT = THREE.RepeatWrapping;
+						block_material.map.repeat.set( 1, .5 );		*/
+		
+
+				// Table
+				table = new Physijs.BoxMesh(
+					new THREE.CubeGeometry(3000, 1, 1000),
+					table_material,
+					0, // mass
+					{ restitution: .2, friction: .8 }
+				);
+				table.position.x = 150;
+				table.position.y = -350;
+				table.position.z = -200;
+				table.rotation.x = Math.PI-50;
+				table.receiveShadow = true;
+				scene.add( table );		
+						
+				
+						
+				if (soundEnabled)
+				{
+
+
+									
+					
+					//Position dependent Sound 1
+					sound1 = new Sound( [ './ThreeJS/examples/sounds/376737_Skullbeatz___Bad_Cat_Maste.mp3', './ThreeJS/examples/sounds/376737_Skullbeatz___Bad_Cat_Maste.ogg' ], 1200, 621, 1 );
+					sound1.position.copy( table.position );
+					sound1.loop = true;
+					sound1.play();	
+					sound1.updateZoom( 0 );
+					
+					
+					sound2 = new Sound( [ './ThreeJS/examples/sounds/358232_j_s_song.mp3' ], 1200, 621, 1 );
+					sound2.position.copy( table.position );
+					sound2.loop = true;
+					sound2.play();
+				}
+					
+				
+				var urls = [ urlPrefix + "posx.jpg", urlPrefix + "negx.jpg",
+						urlPrefix + "posy.jpg", urlPrefix + "negy.jpg",
+						urlPrefix + "posz.jpg", urlPrefix + "negz.jpg" ];
+				textureCube	= THREE.ImageUtils.loadTextureCube( urls );
+				
+				
+				/*
+				//ball - cube reflection material:
+								var ball = new THREE.Mesh( new THREE.SphereGeometry( 100, 32, 200 ), new THREE.MeshBasicMaterial( { color: 0xffffff, envMap: textureCube } ) );
+								ball.position.x = 250;
+								ball.position.y = -260;
+								//ball.position.z = 200;
+								scene.add(ball);*/
+				
+				if (mirror != 0)
+				{
+					//init the cube shadder
+					var shader	= THREE.ShaderLib["cube"];
+					
+					shader.uniforms["tCube"].texture = textureCube;
+					
+					var material = new THREE.ShaderMaterial(
+						{
+							fragmentShader	: shader.fragmentShader,
+							vertexShader	: shader.vertexShader,
+							uniforms	: shader.uniforms,
+							depthWrite: false,
+		      				side: THREE.BackSide
+						});
+	
+					var skybox = new THREE.Mesh(new THREE.CubeGeometry(2000, 2000, 1000), material);
+				    scene.add(skybox);
+				    
+				}
+					
+				// Cube	
+				var geometry = new THREE.CubeGeometry( cubeWidth, 1, cubeDepth );
+
+				for ( var i = 0; i < geometry.faces.length; i ++ ) 
+				{	
+					geometry.faces[ i ].color.setHex( Math.random() * 0xffffff );	
+				}
+
+				var material = new THREE.MeshBasicMaterial( { vertexColors: THREE.FaceColors , opacity: 0.0 } );
+
+				material.transparent = true;
+				
+				cube = new THREE.Mesh( geometry, material );
+				cube.id = "BigCube";
+				cube.position.y = -200;
+				cube.position.z = -300;
+				cube.rotation.y = 0;
+				
+				scene.add( cube );	
+
+			
+		
+				
+				var horizLineSpaceYears = (cubeWidth) / numberYears;	
+				var horizLineSpaceVariables = (cubeWidth) / numberVariables;		
+				var stackedCubeHeight = cubeHeight;
+					
+				var gridHeight = ((stackedCubeHeight + cubesSeparation) *  numberStackedCubes) + 50;				
+				var gridWidthOffset = 150;	
+				var gridWidth = cubeWidth + gridWidthOffset;
+				
+				var startPosition = (stackedCubeHeight + cubesSeparation) *  numberStackedCubes;
+				
+				
+				var startVertTextPosition = (((stackedCubeHeight + cubesSeparation) - startPosition/2 + stackedCubeHeight/2)/2) - stackedCubeHeight;				
+				
+				cube.position.y = (numberYears - 10) * 20;
+										
+				
+				drawYearStackedCubes (numberStackedCubes, cubeWidth, stackedCubeHeight, cubeDepth, startPosition, 0.3, 0xe0e0e0, cubesSeparation);
+
+				
+				//Horizontal Grid
+				DrawCubeGrid (0, mirror, cube, gridWidthOffset, gridWidth, gridWidth, horizLineSpaceVariables, numberVariables, horizLineSpaceYears, numberYears, - Math.PI / 2, 0x000000, 1.0, -gridHeight/2, 0, 0x000000, 0.3, 1, 0);
+				
+				//Vertical Grid
+				DrawCubeGrid (1, mirror, cube, gridWidthOffset, gridWidth, gridHeight, cubeHeight, 2, horizLineSpaceYears, numberYears, - Math.PI / 2, 0x000000, 1.0, 0, -cubeDepth/2, 0x000000, 0.3, 1, startVertTextPosition);																		
+			
+				
+				
+				
+				/*
+				//Draw heatmaps
+				for ( var yearMap = 0; yearMap < numberYears; yearMap++ ) 
+				{					
+					//createText(plane, playerCurrentYear - 1 + i, -120, ( (i-1) * horizLineSpace ) + startVertTextPosition + 12, 2);
+					
+					createHeatMap (cube, playerCurrentYear + yearMap, 0, (yearMap) * (horizLineSpace) + startVertTextPosition, 0, cubeWidth, cubeDepth);	
+					//createHeatMap(target, text, posX, posY, posZ, cubesWidth, cubesDepth)	
+					
+				}				
+				*/
+	
+						
+				//don't delete these examples
+				/*
+				renderer = new THREE.CanvasRenderer();
+								renderer.setSize( window.innerWidth, window.innerHeight );
+				
+				document.addEventListener( 'mousedown', onDocumentMouseDown, false );
+								document.addEventListener( 'touchstart', onDocumentTouchStart, false );
+								document.addEventListener( 'touchmove', onDocumentTouchMove, false );
+				*/
+				
+				
+				
+				
+				
+				//Plot of all selected indicators for all selected years for all selected countries
+				
+/*
+
+				//plot with nomal spline line
+				var pointsArrayVar1  = [];
+				//iterate countries
+				for (i=0; i<packedData.length; i++)
+				{
+					
+					var indicatorCount = 0;
+					
+					
+					//iterates all series data per indicator
+					for (totalSeriesData=0; totalSeriesData<packedData[i].data.length;)
+					{
+						//iterates all series per sets of all years
+						for (j=0; j<packedData[i].data.length/indicatorsList.length; j++)
+						{
+							//AddCube3DPoint(xValue, yValue, zValue, targetArray, xMin, yMin, zMin, xMax, yMax, zMax)
+							pointsArrayVar1 = AddCube3DPoint(j, packedData[i].data[totalSeriesData].y, indicatorCount*100, pointsArrayVar1, 0, 0, 0, 10, 30, 500);		
+							totalSeriesData++;							
+						}
+																									
+						Plot3DLine(cube, pointsArrayVar1, packedData[i].color, 50, 100);
+						pointsArrayVar1  = [];
+						indicatorCount++;						
+					}
+				}
+	*/
+
+
+
+			
+/*
+				//plot mesh surface using mesh geometry faces
+				var pointsArrayVar1  = [];
+				var xCoord = 0;
+				//iterate countries
+				for (i=0; i<packedData.length; i++)
+				{
+					
+					var indicatorCount = 0;
+					
+					
+					//iterates all series per sets of all years
+					for (j = 0; j<packedData[i].data.length; j++)
+					{
+						
+							if ( j %(packedData[i].data.length/indicatorsList.length) == 0 && j!=0)
+							{
+								indicatorCount++;
+								xCoord = 0;
+							}
+								
+							//console.log("indicatorCount: " + indicatorCount + "j: " + j + " " + packedData[i].data.length/indicatorsList.length);
+								
+							//AddCube3DPoint(xValue, yValue, zValue, targetArray, xMin, yMin, zMin, xMax, yMax, zMax)
+							pointsArrayVar1 = AddCube3DPoint(xCoord, packedData[i].data[j].y, indicatorCount*100, pointsArrayVar1, 0, 0, 0, 10, 30, 500);
+							xCoord++;
+							
+					}
+					//console.log('country name: ' + packedData[i].color);
+				
+					//Plot3DParticlesMesh(target, shaderAttributes, pointsArray, pointsColor, plotSize, numberPoints, transparent, depthTest, numberSepPoints)						
+					Plot3DMesh(cube, pointsArrayVar1, packedData[i].color, 50, 10000, packedData[i].data.length/indicatorsList.length);
+					//Plot3DParticlesLine(cube, attributesCountry[i], pointsArrayVar1, packedData[i].color, 50, 100);
+					
+					pointsArrayVar1  = [];
+					xCoord = 0;
+				}	*/
+			
+					
+
+
+				//Plot Lines using particle systems, instead of using line geometries
+				var pointsArrayVar1  = [];
+				//iterate countries
+				for (i=0; i<packedData.length; i++)
+				{
+					
+					var indicatorCount = 0;						
+					
+					//iterates all series data per indicator
+					for (totalSeriesData=0; totalSeriesData<packedData[i].data.length;)
+					{
+						//iterates all series per sets of all years
+						for (j=0; j<packedData[i].data.length/indicatorsList.length; j++)
+						{
+								//AddCube3DPoint(xValue, yValue, zValue, targetArray, xMin, yMin, zMin, xMax, yMax, zMax)
+								pointsArrayVar1 = AddCube3DPoint(j, packedData[i].data[totalSeriesData].y, indicatorCount*100, pointsArrayVar1, 0, 0, 0, 10, 30, 500);
+																														
+								totalSeriesData++;							
+						}
+																															
+						Plot3DParticlesLine(cube, attributesCountry[i], pointsArrayVar1, packedData[i].color, 50, 100);
+						pointsArrayVar1  = [];
+						indicatorCount++;
+						
+					}
+					//console.log('country name: ' + packedData[i].color);
+				}
+
+	
+
+
+/*
+				//plot wireframe mesh using particle systems instead of using mesh geometry faces
+				var pointsArrayVar2  = [];
+				var xCoord = 0;
+				//iterate countries
+				for (i=0; i<packedData.length; i++)
+				{
+					
+					var indicatorCount = 0;
+					
+					
+					//iterates all series per sets of all years
+					for (j = 0; j<packedData[i].data.length; j++)
+					{
+						
+							if ( j %(packedData[i].data.length/indicatorsList.length) == 0 && j!=0)
+							{
+								indicatorCount++;
+								xCoord = 0;
+							}
+								
+							//console.log("indicatorCount: " + indicatorCount + "j: " + j + " " + packedData[i].data.length/indicatorsList.length);
+								
+							//AddCube3DPoint(xValue, yValue, zValue, targetArray, xMin, yMin, zMin, xMax, yMax, zMax)
+							pointsArrayVar2 = AddCube3DPoint(xCoord, packedData[i].data[j].y, indicatorCount*100, pointsArrayVar2, 0, 0, 0, 10, 30, 500);
+							xCoord++;
+							
+					}
+					//console.log('country name: ' + packedData[i].color);
+				
+					//Plot3DParticlesMesh(target, shaderAttributes, pointsArray, pointsColor, plotSize, numberPoints, transparent, depthTest, numberSepPoints)						
+					Plot3DParticlesMesh(cube, attributesCountryMesh[i], pointsArrayVar2, packedData[i].color, 50, 50, true, false, packedData[i].data.length/indicatorsList.length);
+					//Plot3DParticlesLine(cube, attributesCountry[i], pointsArrayVar1, packedData[i].color, 50, 100);
+					
+					pointsArrayVar2  = [];
+					xCoord = 0;
+				}
+*/
+
+				//Fractals
+		
+
+
+				window.addEventListener( 'resize', onWindowResize, false );
+			}
+
+
+			function onWindowResize() 
+			{
+				windowHalfX = window.innerWidth / 2;
+				windowHalfY = window.innerHeight / 2;
+
+				camera.aspect = window.innerWidth / window.innerHeight;
+				camera.updateProjectionMatrix();
+
+				renderer.setSize( window.innerWidth, window.innerHeight );
+			}
+
+			
+			function rangeValues(minObtained, maxObtained, wantedMin, wantedMax, value)
+			{
+				var realValue = 0;
+				
+				realValue = (( (wantedMax - wantedMin) * (value - minObtained) ) / (maxObtained - minObtained)) + wantedMin;
+				
+				
+				return realValue;
+				
+			}
+			
+			
+			
+			
+			
+			//Leap Motion
+			function vectorToString(vector, digits) 
+			{
+				if (typeof digits === "undefined") 
+			  	{
+			  		digits = 1;
+			  	}
+			  	
+			  	return "(" + vector[0].toFixed(digits) + ", "
+			             + vector[1].toFixed(digits) + ", "
+			             + vector[2].toFixed(digits) + ")";
+			}
+				
+			
+			function togglePause() 
+			{
+				paused = !paused;
+			
+/*
+				  if (paused) {
+				    document.getElementById("pause").innerText = "Resume";
+				  } else {
+				    document.getElementById("pause").innerText = "Pause";
+				  }
+*/
+			}
+	
+			function pauseForGestures() 
+			{
+/*
+			  if (document.getElementById("pauseOnGesture").checked) {
+			    pauseOnGesture = true;
+			  } else {
+			    pauseOnGesture = false;
+			  }*/
+
+			}
+			
+			function checkLibrary() 
+			{
+/*
+			  if (typeof Leap === "undefined") {
+			    document.getElementById("main").innerHTML = "The Leap JavaScript client library (leap.js file) was not found. Please download the library from the GitHub project at <a href='https://github.com/leapmotion/leapjs'>https://github.com/leapmotion/leapjs</a>."
+			    alert("The Leap JavaScript client library (leap.js file) was not found. Please download the latest version from the GitHub project at https://github.com/leapmotion/leapjs");
+			  }
+*/
+			}
+			
+			//Weigth Gaussian Smooth
+			// Adapted from http://www.swharden.com/blog/2008-11-17-linear-data-smoothing-in-python/
+			function WeightGaussianSmooth (list, degree) 
+			{
+			    var win = degree*2-1;
+			    weight = _.range(0, win).map(function (x) { return 1.0; });
+			    weightGauss = [];
+			    for (i in _.range(0, win)) {
+			        i = i-degree+1;
+			        frac = i/win;
+			        gauss = 1 / Math.exp((4*(frac))*(4*(frac)));
+			        weightGauss.push(gauss);
+			    }
+			    weight = _(weightGauss).zip(weight).map(function (x) { return x[0]*x[1]; });
+			    smoothed = _.range(0, (list.length+1)-win).map(function (x) { return 0.0; });
+			    for (i=0; i < smoothed.length; i++) {
+			        smoothed[i] = _(list.slice(i, i+win)).zip(weight).map(function (x) { return x[0]*x[1]; }).reduce(function (memo, num){ return memo + num; }, 0) / _(weight).reduce(function (memo, num){ return memo + num; }, 0);
+			    }
+			    return smoothed;
+			}			
+			
+			function lerp(a, b, fac) 
+			{
+			    var ret = [];
+			
+			    for(var i = 0; i < Math.min(a.length, b.length); i++) {
+			        ret[i] = a[i] * (1 - fac) + b[i] * fac;
+			    }
+			
+			    return ret;
+			}
+			
+			// this func returns n colors (begin, <interpolated colors>, end)
+			function lerpColors(begin, end, n) {
+			    var ret = [];
+			
+			    for(var i = 0; i < n; i++) {
+			        var fac = i / (n - 1);
+			
+			        ret.push(lerp(a.toRGBArray(), b.toRGBArray(), fac));
+			    }
+			
+			    return ret;
+			}
+
+			//var col1 = new Color('#ff0011'); // some red
+			//var col2 = new Color('#00ff11'); // some green
+			
+			//var colors = lerpColors(col1, col2, 7);
+			
+			
+			
+			
+			
+		
+			
+			//Simple low pass filter
+			var ALPHA = 0.1;
+
+			function SimpleLowPassFilter(input, previousOutput) 
+			{			    
+			    var output = (input * ALPHA) + (previousOutput * (1.0 - ALPHA));
+			    
+			    return output;
+			}
+			
+			// Store frame for motion functions
+			var previousFrame;
+			
+			//if we want to implement pause tracking
+			var paused = false;
+			var pauseOnGesture = false;
+		
+			// Setup Leap loop with frame callback function
+			var controllerOptions = {enableGestures: true};
+			
+		    Leap.loop(controllerOptions, function(frame) 
+		    {
+				if (paused) 
+				{
+					return; // Skip this update
+				}
+				
+			
+				// Display Frame object data
+				//var frameOutput = document.getElementById("frameData");
+		
+		  		var frameString = "Frame ID: " + frame.id  + "<br />"
+		                  + "Timestamp: " + frame.timestamp + " &micro;s<br />"
+		                  + "Hands: " + frame.hands.length + "<br />"
+		                  + "Fingers: " + frame.fingers.length + "<br />"
+		                  + "Tools: " + frame.tools.length + "<br />"
+		                  + "Gestures: " + frame.gestures.length + "<br />";
+		
+		  		// Frame motion factors
+		  		if (previousFrame) 
+		  		{
+		    		var translation = frame.translation(previousFrame);
+		    		frameString += "Translation: " + vectorToString(translation) + " mm <br />";
+		
+				    var rotationAxis = frame.rotationAxis(previousFrame);
+				    var rotationAngle = frame.rotationAngle(previousFrame);
+				    frameString += "Rotation axis: " + vectorToString(rotationAxis, 2) + "<br />";
+				    frameString += "Rotation angle: " + rotationAngle.toFixed(2) + " radians<br />";
+		
+				    var scaleFactor = frame.scaleFactor(previousFrame);
+				    frameString += "Scale factor: " + scaleFactor.toFixed(2) + "<br />";
+		  		}
+		  		
+		  		
+		  		//Left vs Right Hand
+/*
+				private Hand getRightHand(HandList hands){
+				    for(Hand hand : hands){
+				        if(hand.sphereCenter().getX() < 0){
+				            return hand;
+				        }
+				    }
+				    return null;
+				}
+				
+				private Hand getLeftHand(HandList hands){
+				    for(Hand hand : hands){
+				        if(hand.sphereCenter().getX() > 0){
+				            return hand;
+				        }
+				    }
+				    return null;
+				}	*/
+	  		
+		  		
+		  		
+		  		
+		  		
+		  		
+		  		//frameOutput.innerHTML = "<div style='width:300px; float:left; padding:5px'>" + frameString + "</div>";
+		
+		  		// Display Hand object data
+		  		//var handOutput = document.getElementById("handData");
+		  		var handString = "";
+		  
+		  		if (frame.hands.length > 0) 
+		  		{
+				    for (var i = 0; i < frame.hands.length; i++) 
+				    {
+				    	var hand = frame.hands[i];
+		
+					    handString += "<div style='width:300px; float:left; padding:5px'>";
+					    handString += "Hand ID: " + hand.id + "<br />";
+					    handString += "Direction: " + vectorToString(hand.direction, 2) + "<br />";
+					    handString += "Palm normal: " + vectorToString(hand.palmNormal, 2) + "<br />";
+					    handString += "Palm position: " + vectorToString(hand.palmPosition) + " mm<br />";
+						handString += "Palm velocity: " + vectorToString(hand.palmVelocity) + " mm/s<br />";
+						handString += "Sphere center: " + vectorToString(hand.sphereCenter) + " mm<br />";
+						handString += "Sphere radius: " + hand.sphereRadius.toFixed(1) + " mm<br />";
+						
+						
+			
+
+
+						if (hand.pointables.length == 5 )
+						{
+								//cube.position.x = rangeValues(-160, 160, -200, 300, hand.sphereCenter[0]);
+								//cube.position.y = rangeValues(160, 240, 90, 600, hand.sphereCenter[1]);								
+								//cube.position.z = rangeValues(-160, 160, -200, 300, hand.sphereCenter[2]);
+								
+								//cube.rotation.x = hand.sphereCenter[0];
+								//cube.rotation.y = hand.sphereCenter[1];								
+								//cube.rotation.z = hand.sphereCenter[2];
+
+								if (showGesturesInfo)
+								{
+									$('#gestureImageInfo').attr("data", "./skybox_images/AuxImages/HandGestures/hand_5_fingers_orange_masterfile.jpg");
+									$('#gesturesInfo').fadeIn(500);
+								
+								}
+									
+								cube.position.x = rangeValues(-100, 120, -350, 600, hand.palmPosition[0]);
+								cube.position.y = rangeValues(70, 250, -200, 250, hand.palmPosition[1]);
+								cube.position.z = rangeValues(70, 250, -200, 250, hand.palmPosition[2]);
+								
+								var rotationX = (hand.rotation[1][2]*Math.PI);
+								var rotationY = (hand.rotation[1][1]);
+								var rotationZ = (hand.rotation[1][0]*Math.PI);
+					
+								if (rotationX>=-0.5 && rotationX<=0.5)
+									cube.rotation.x = rangeValues(-0.5, 0.5, -0.3, 0.7, -rotationX); //Adjust values to make the gesture more natural 
+								
+								//cube.rotation.y = rotationY
+								//cube.rotation.z = rotationZ;
+								
+							
+								//console.log(-rotationX);
+								
+								//cube.position.z = rangeValues(-10, 180, -200, 250, hand.palmPosition[2]);
+								  
+							}			
+		
+				        // Hand motion factors
+		      			if (previousFrame) 
+		      			{
+					        var translation = hand.translation(previousFrame);
+					        handString += "Translation: " + vectorToString(translation) + " mm<br />";
+					
+					        var rotationAxis = hand.rotationAxis(previousFrame, 2);
+					        var rotationAngle = hand.rotationAngle(previousFrame);
+					        handString += "Rotation axis: " + vectorToString(rotationAxis) + "<br />";
+					        handString += "Rotation angle: " + rotationAngle.toFixed(2) + " radians<br />";
+		
+					        var scaleFactor = hand.scaleFactor(previousFrame);
+					        handString += "Scale factor: " + scaleFactor.toFixed(2) + "<br />";
+					        
+					        /*
+							if (hand.pointables.length == 5 && hand.sphereRadius.toFixed(1)>=60)
+															camera.position.z = rangeValues(60, 98, -100, 1000, hand.sphereRadius.toFixed(1))*/
+	
+		
+
+
+													
+					    }
+		
+						// IDs of pointables (fingers and tools) associated with this hand
+				      	if (hand.pointables.length > 0) 
+				      	{
+					        var fingerIds = [];
+					        var toolIds = [];
+		
+					        for (var j = 0; j < hand.pointables.length; j++) 
+					        {
+								var pointable = hand.pointables[j];
+		
+								if (pointable.tool) 
+								{
+									toolIds.push(pointable.id);
+				          		}
+				          		else 
+			          			{
+				            		fingerIds.push(pointable.id);
+				          		}
+				        	}
+				        	
+					        if (fingerIds.length > 0) 
+					        {
+					        	handString += "Fingers IDs: " + fingerIds.join(", ") + "<br />";
+					        	
+					        		if (hand.pointables.length == 5 )
+									{
+										//if hand.pointables[0]
+									}
+					        	
+					        }
+					        
+					        if (toolIds.length > 0) 
+					        {
+					        	handString += "Tools IDs: " + toolIds.join(", ") + "<br />";
+					        }
+					    }
+						handString += "</div>";
+					}
+				}
+		  		else 
+		  		{
+		    		handString += "No hands";
+		  		}
+		  		
+		  		//handOutput.innerHTML = handString;
+		
+				// Display Pointable (finger and tool) object data
+				//var pointableOutput = document.getElementById("pointableData");
+				var pointableString = "";
+				
+				if (frame.pointables.length > 0) 
+				{
+		    		for (var i = 0; i < frame.pointables.length; i++) 
+		    		{      
+		      			var pointable = frame.pointables[i];
+		
+						pointableString += "<div style='width:250px; float:left; padding:5px'>";
+						pointableString += "Pointable ID: " + pointable.id + "<br />";
+						pointableString += "Belongs to hand with ID: " + pointable.handId + "<br />";
+		
+						if (pointable.tool) 
+						{
+		    				pointableString += "Classified as a tool <br />";
+							pointableString += "Length: " + pointable.length.toFixed(1) + " mm<br />";
+							pointableString += "Width: "  + pointable.width.toFixed(1) + " mm<br />";
+						}
+		  				else 
+		  				{
+		    				pointableString += "Classified as a finger<br />";
+							pointableString += "Length: " + pointable.length.toFixed(1) + " mm<br />";
+		  				}
+		
+						pointableString += "Direction: " + vectorToString(pointable.direction, 2) + "<br />";
+						pointableString += "Tip position: " + vectorToString(pointable.tipPosition) + " mm<br />";
+						pointableString += "Tip velocity: " + vectorToString(pointable.tipVelocity) + " mm/s<br />";
+		
+						pointableString += "</div>";
+		    		}
+		  		}
+		  		else 
+		  		{
+		    		pointableString += "<div>No pointables</div>";
+		    		$('#gesturesInfo').fadeOut(500);
+					
+		  		}
+		
+				//pointableOutput.innerHTML = pointableString;
+		
+				// Display Gesture object data
+				//var gestureOutput = document.getElementById("gestureData");
+				var gestureString = "";
+				
+				if (frame.gestures.length > 0) 
+				{
+			    	if (pauseOnGesture) 
+			    	{
+			      		togglePause();
+			    	}
+		
+			    	for (var i = 0; i < frame.gestures.length; i++) 
+			    	{
+						var gesture = frame.gestures[i];
+					    gestureString += "Gesture ID: " + gesture.id + ", "
+					                    + "type: " + gesture.type + ", "
+					                    + "state: " + gesture.state + ", "
+					                    + "hand IDs: " + gesture.handIds.join(", ") + ", "
+					                    + "pointable IDs: " + gesture.pointableIds.join(", ") + ", "
+					                    + "duration: " + gesture.duration + " &micro;s, ";
+		
+		      			switch (gesture.type) 
+		      			{
+					        case "circle":
+					        
+					          gestureString += "center: " + vectorToString(gesture.center) + " mm, "
+					                        + "normal: " + vectorToString(gesture.normal, 2) + ", "
+					                        + "radius: " + gesture.radius.toFixed(1) + " mm, "
+					                        + "progress: " + gesture.progress.toFixed(2) + " rotations";
+					                        
+					                        // Needs 2 fingers
+											if (frame.pointables.length == 2)
+											{						
+												$('#zoomKnobDiv').fadeIn(500);
+												$('#gesturesInfo').fadeOut(500);
+												showGesturesInfo = false;
+												
+												var zoomValue = 0;
+												//Normal X is negative or positive?																					
+												if(gesture.normal[0]>0)
+												{					                        
+													
+													//Zoom in					
+													if (camera.position.z+parseInt(gesture.progress.toFixed(2))<1265)
+													{
+														camera.position.z += parseInt(gesture.progress.toFixed(2));
+														zoomValue = rangeValues(200, 1265, 100, 0, camera.position.z);													 
+														$('#zoomKnob').val(zoomValue).trigger('change');
+														
+														if (soundEnabled)
+														{
+		    												sound1.updateZoom( zoomValue );
+		    												sound2.updateZoom( 100 - zoomValue);
+		    											}
+													}
+													
+													
+											   }
+											   else
+											   {
+											   		
+											   		//Zoom out
+													if (camera.position.z-parseInt(gesture.progress.toFixed(2))>200)
+													{
+														camera.position.z -= parseInt(gesture.progress.toFixed(2));
+														zoomValue = rangeValues(200, 1265, 100, 0, camera.position.z);
+														$('#zoomKnob').val(zoomValue).trigger('change');
+														
+														if (soundEnabled)
+														{
+		    												sound1.updateZoom( zoomValue );
+		    												sound2.updateZoom( 100 - zoomValue);
+		    											}
+														
+													}
+													
+											   }
+											   
+											  
+											   
+		    										
+		    										
+											   
+										}
+					                        	
+					                  	
+					                        	
+					          break;
+					        case "swipe":
+					          gestureString += "start position: " + vectorToString(gesture.startPosition) + " mm, "
+					                        + "current position: " + vectorToString(gesture.position) + " mm, "
+					                        + "direction: " + vectorToString(gesture.direction, 2) + ", "
+					                        + "speed: " + gesture.speed.toFixed(1) + " mm/s";
+					          break;
+					        case "screenTap":
+					        case "keyTap":
+					          gestureString += "position: " + vectorToString(gesture.position) + " mm, "
+					                        + "direction: " + vectorToString(gesture.direction, 2);
+					          break;
+					        default:
+					          gestureString += "unkown gesture type";
+					        
+					          
+					     }
+		      			
+		      			gestureString += "<br />";
+		    		}
+		  		}
+				else 
+				{
+		    		gestureString += "No gestures";
+					$('#zoomKnobDiv').fadeOut(500);	
+					showGesturesInfo = true;				
+		  		}
+		  		
+		  		//gestureOutput.innerHTML = gestureString;
+		
+				// Store frame for motion functions
+		  		previousFrame = frame;
+  		
+			  	
+			  	
+    			var fingerIds = {};
+				var handIds = {};
+				var str = "";
+				var n = str.split ('_');
+				
+				//timeout
+				var t;
+											
+			
+				if (mirror == 2)
+				{
+					if( video.readyState == video.HAVE_ENOUGH_DATA )
+					{
+						  videoTexture.needsUpdate = true;
+					}
+					
+					cube.rotation.y = -((faceTrackingX-20) * 0.05);
+
+					//console.log(faceTrackingY);					
+					//camera.position.z = rangeValues(78,90, 200, 1200, faceTrackingY);
+					//cube.rotation.x = rangeValues(80,95, -1, 3, faceTrackingY);
+				}
+
+			    
+			    if (frame.hands == undefined ) 
+			    { 
+			      var handsLength = 0; 
+			    } 
+			    else 
+			    {
+			      var handsLength = frame.hands.length;
+			    }
+		
+			    for (var handId = 0, handCount = handsLength; handId != handCount; handId++) 
+			    {
+					var hand = frame.hands[handId];
+					var posX = (hand.palmPosition[0]*3);
+					var posY = (hand.palmPosition[2]*3)-300;
+					var posZ = (hand.palmPosition[1]*3);
+					var rotX = (hand.rotation[1][2]*90);
+					var rotY = (hand.rotation[1][1]*90);
+					var rotZ = (hand.rotation[1][0]*90);
+					var sphere = spheres[hand.id];
+				
+					//console.log(hand.rotation[1]);
+			    
+			    	if (!sphere) 
+			    	{
+	/*
+						var sphereDiv = document.getElementById("sphere").cloneNode(true);
+														 sphereDiv.setAttribute('id',hand.id);
+							sphereDiv.style.backgroundColor='#'+Math.floor(Math.random()*16777215).toString(16);
+														 document.getElementById('scene').appendChild(sphereDiv);*/
+	
+			        	
+			        	spheres[hand.id] = hand.id;
+			  		} 
+			  		else 
+			  		{
+			    	/*
+						var sphereDiv =  document.getElementById(hand.id);
+											if (typeof(sphereDiv)!= 'undefined' && sphereDiv != null) 
+											{
+												  moveSphere(sphereDiv, posX, posY, posZ, rotX, rotY, rotZ);
+											}*/
+					
+			  		}
+			  		
+			  		handIds[hand.id] = true;
+				}
+				
+				for (handId in spheres) 
+				{
+		  			if (!handIds[handId]) 
+		  			{
+		    			/*
+						var sphereDiv =  document.getElementById(spheres[handId]);
+												sphereDiv.parentNode.removeChild(sphereDiv);*/
+						
+		    			delete spheres[handId];
+		  			}
+				}
+				
+				
+				
+				
+		
+				for (var pointableId = 0, pointableCount = frame.pointables.length; pointableId != pointableCount; pointableId++) 
+				{
+					var pointable = frame.pointables[pointableId];
+				  	var posX = (pointable.tipPosition[0]*3);
+				  	var posY = (pointable.tipPosition[1]*3)-400;
+				  	var posZ = (pointable.tipPosition[2]*3);
+				  	var dirX = -(pointable.direction[0]*Math.PI);
+				  	var dirY = -(pointable.direction[1]*-Math.PI);
+				  	var dirZ = (pointable.direction[2]*-Math.PI);
+				  	var finger = fingers[pointable.id];
+				  	
+		  			if (!finger) 
+		  			{
+		    			/*
+						var fingerDiv = document.getElementById("finger").cloneNode(true);
+												fingerDiv.setAttribute('id',pointable.id);
+												fingerDiv.style.backgroundColor='#' + Math.floor(Math.random()*16777215).toString(16);
+												document.getElementById('scene').appendChild(fingerDiv);*/
+												
+						// Draw finger Cubes	
+						var geometry = new THREE.CubeGeometry( 25, 25, 50 );
+		
+						for ( var i = 0; i < geometry.faces.length; i ++ ) 
+						{	
+							geometry.faces[ i ].color.setHex(0xff0000);	
+						}
+		
+						var material = new THREE.MeshLambertMaterial( { vertexColors: THREE.FaceColors , opacity: 0.5 } );
+
+						material.transparent = true;
+						
+						
+						var movingCubePointer = new THREE.Mesh( geometry, material );
+						movingCubePointer.id = pointable.id;							
+						scene.add( movingCubePointer );	
+						
+		        	
+		        		fingers[pointable.id] = pointable.id;
+		        		fingers3D[pointable.id] = movingCubePointer;
+		        		
+		        		//console.log(pointable.id);
+
+		  			} 
+		  			else 
+		  			{
+		    			/*
+							var fingerDiv =  document.getElementById(pointable.id);
+							if (typeof(fingerDiv) != 'undefined' && fingerDiv != null) 
+							{
+								  moveFinger(fingerDiv, posX, posY, posZ, dirX, dirY, dirZ);
+							}
+						*/
+						
+						if (fingers3D[pointable.id])
+						{
+							//probably not so fast...
+							//var posVector = new THREE.Vector3( posX, posY, posZ);
+							//var dirVector = new THREE.Vector3( dirX, dirZ, dirY);
+							
+							var movingCubePointer = fingers3D[pointable.id];
+							movingCubePointer.position.x = posX;
+							movingCubePointer.position.y = posY;
+							movingCubePointer.position.z = posZ;
+							
+							
+							movingCubePointer.rotation.x = dirY;
+							movingCubePointer.rotation.y = dirX;
+							movingCubePointer.rotation.Z = dirZ;
+							
+
+							/*
+								if (pointableId == 0 && frame.pointables.length == 1)
+								{
+									//cube.rotation.y = (posX - cube.rotation.y +50) * 0.008;
+								}
+							*/
+							
+							if ((pointableId == 0 || pointableId == 1) && (frame.pointables.length == 1 || frame.pointables.length == 2))
+							{
+								var originPoint = movingCubePointer.position.clone();
+								
+								
+								if ((mirror == 0 || mirror == 1) && pointableId == 0 && frame.pointables.length == 1)
+								{
+									//if (showGesturesInfo)
+									{
+										console.log('1 finger');
+										$('#gestureImageInfo').attr("data", "./skybox_images/AuxImages/HandGestures/hand_1_finger_pointing_orange_masterfile_edited.jpg");
+										$('#gesturesInfo').fadeIn(1000);
+										
+									}
+									
+									//Cube Rotation X
+									cube.rotation.y = (posX - cube.rotation.y ) * 0.008;
+								
+
+									
+										
+								}								
+									
+								for (var vertexIndex = 0; vertexIndex < movingCubePointer.geometry.vertices.length; vertexIndex++)
+								{		
+									var localVertex = movingCubePointer.geometry.vertices[vertexIndex].clone();
+									var globalVertex = localVertex.applyMatrix4( movingCubePointer.matrix );
+									var directionVector = globalVertex.sub( movingCubePointer.position );
+									
+									var ray = new THREE.Raycaster( originPoint, directionVector.clone().normalize() );
+									var collisionResults = ray.intersectObjects( cube.children );
+									
+									if ( collisionResults.length > 0 && collisionResults[0].distance < directionVector.length() ) 
+									{
+										//appendText(" Hit ");										
+										
+										if ( INTERSECTED != collisionResults[ 0 ].object) 
+										{
+																																
+											//INTERSECTED = intersects[ 0 ].object;
+											if ( INTERSECTED ) 
+											{
+												str = INTERSECTED.id;
+												if (str.length>0)
+													n = str.split('_');
+												
+												if (n.length >0 && n[0]=="year")
+												{												
+													
+													INTERSECTED.material.emissive.setHex( INTERSECTED.currentHex );
+													
+													if (pointableId == 1 && frame.pointables.length == 2)
+													{	
+														t = setTimeout(
+															function()
+															{ 
+																
+																	//console.log("Cube:" + INTERSECTED.id + " was selected");
+																	INTERSECTED.material.emissive.setHex( INTERSECTED.currentHex );	
+																	INTERSECTED = null;
+																	str = "";																
+																	n = new Array();
+																 
+																
+															}
+														,5000);	
+													}	
+												}										
+											}
+													
+											INTERSECTED = collisionResults[ 0 ].object;
+											
+											if (INTERSECTED)
+											{
+												str = INTERSECTED.id;
+												if (str.length>0)
+													n = str.split('_');
+												
+												//console.log("teste: " + n[0]);
+												
+												if (n.length >0 && n[0]=="year")
+												{
+													INTERSECTED.currentHex = INTERSECTED.material.emissive.getHex();
+													INTERSECTED.material.emissive.setHex( 0xff0000 );
+												}
+											}
+											
+										}			
+									} 
+									else 
+									{										
+										if ( INTERSECTED)
+										{
+											str = INTERSECTED.id;
+											if (str.length>0)
+												n = str.split('_');		
+																					
+											if (n.length >0 && n[0]=="year")
+											{
+												INTERSECTED.material.emissive.setHex( INTERSECTED.currentHex );
+												//console.log("Cube:" + INTERSECTED.id + " was de-selected");		
+											}
+										}
+										clearTimeout(t);
+										//INTERSECTED.position.z -=10;
+										INTERSECTED = null;	
+										str = "";
+										n = new Array();									
+									}							
+								}							
+							}
+							
+							if (frame.pointables.length == 2 )
+							{
+								if (showGesturesInfo)
+								{
+									$('#gestureImageInfo').attr("data", "./skybox_images/AuxImages/HandGestures/hand_2_fingers_orange_masterfile.jpg");
+									$('#gesturesInfo').fadeIn(500);
+									console.log('2 fingers');
+								
+								}		
+							}
+
+						
+							if (pointableId == 2 && frame.pointables.length == 3)
+							{
+								
+									if (showGesturesInfo)
+									{
+										$('#gestureImageInfo').attr("data", "./skybox_images/AuxImages/HandGestures/hand_3_fingers_orange_masterfile.jpg");
+										$('#gesturesInfo').fadeIn(500);
+										console.log('3 fingers');
+									}
+								
+	/*
+								if (posY >=90 && posY<=600)
+										cube.position.y = posY;
+																		   if (posX >=-250 && posX<=250)
+										cube.position.x = posX ;
+	*/
+	
+							}
+							else if (pointableId == 3 && frame.pointables.length == 4)
+							{
+								/*
+								if ((posZ + 800)<=1200)
+																	camera.position.z = posZ + 800;*/
+									if (showGesturesInfo)
+									{
+										$('#gestureImageInfo').attr("data", "./skybox_images/AuxImages/HandGestures/hand_4_fingers_orange_masterfile.jpg");
+										$('#gesturesInfo').fadeIn(500);
+										console.log('4 fingers');
+									}
+								
+								
+							}
+						/*
+							else if (pointableId == 4 && frame.pointables.length == 5)
+													{
+														//cube.rotation.x = (posY - cube.rotation.x ) * 0.005;
+														//To be replaced with hand Rotation
+														//cube.rotation.x = Math.PI*rotX; 
+														//cube.rotation.y = Math.PI*rotY;
+														//cube.rotation.z = Math.PI*rotZ;
+														
+														//console.log(cube.rotation.x);
+														
+													}*/
+						
+							
+						}
+						else
+						{
+							$('#gesturesInfo').fadeOut(500);
+							console.log('no fingers');
+						}
+						
+		  			}
+		  			fingerIds[pointable.id] = true;
+				}
+		
+				for (fingerId in fingers) 
+				{
+		  			if (!fingerIds[fingerId]) 
+		  			{
+		    			/*
+						var fingerDiv =  document.getElementById(fingers[fingerId]);
+						fingerDiv.parentNode.removeChild(fingerDiv);*/
+						scene.remove(fingers3D[fingerId]);
+
+						
+		    			delete fingers[fingerId];
+		    			delete fingers3D[fingerId];
+		  			}
+				}
+				
+				/*
+				document.getElementById('showHands').addEventListener('mousedown', 
+					function() 
+					{
+						  document.getElementById('app').setAttribute('class','show-hands');
+					}, false
+				);
+		
+				document.getElementById('hideHands').addEventListener('mousedown', 
+					function() 
+					{
+						  document.getElementById('app').setAttribute('class','');
+					}, false
+				);*/
+				
+				var time = Date.now() * 0.005;
+				//particlesCube.rotation.z = 0.01 * time;
+	
+	
+			/*
+				//animate all countries line shaders
+				for (country=0; country<attributesCountry.length; country++)
+				{
+					for( var i = 0; i < attributesCountry[country].size.value.length; i++ ) 
+					{	
+						//attributesCountry[country].value[ i ] = 14 + 13 * Math.sin( 0.1 * i + time );
+						attributesCountry[country].size.value[ i ] = Math.random()*100 + 10;	
+					}
+
+					attributesCountry[country].size.needsUpdate = true;
+				}
+			*/
+			
+						
+				
+				
+		
+				//animate a specific country (if using shaders)
+				var countryMesh = 2;
+				for( var i = 0; i < attributesCountryMesh[countryMesh].size.value.length; i++ ) 
+				{	
+					//attributesCountry[country].value[ i ] = 14 + 13 * Math.sin( 0.1 * i + time );
+					attributesCountryMesh[countryMesh].size.value[ i ] = Math.random() * 100 + 10;	
+				}
+
+				attributesCountryMesh[countryMesh].size.needsUpdate = true;
+		
+		
+
+				
+			/*
+				for( var i = 0; i < attributesPlot2.size.value.length; i++ ) 
+							{	
+								attributesPlot2.size.value[ i ] = 14 + 13 * Math.sin( 0.1 * i + time );
+								//attributesPlot2.size.value[ i ] = Math.random()*100 + 10;	
+							}
+			
+							attributesPlot2.size.needsUpdate = true;*/
+			
+				
+		    	
+		    	renderer.render( scene, camera );
+		    	
+		    
+		    	
+		    	//render(frame);
+		    	stats.update();
+		    	physics_stats.update();
+		  	});		
+
+		</script>
+
+	</body>
+</html>
