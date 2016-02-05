@@ -27,6 +27,5 @@ Plots can be made using particles...
 
 My contact: njssnjss@gmail.com
 
-
-[![Bitdeli Badge](https://d2weczhvl823v0.cloudfront.net/njss/spacetimecube3d/trend.png)](https://bitdeli.com/free "Bitdeli Badge")
+[![DOI](https://zenodo.org/badge/20295/njss/SpaceTimeCube3D.svg)](https://zenodo.org/badge/latestdoi/20295/njss/SpaceTimeCube3D)
 
