@@ -32,6 +32,6 @@ My contact: njssnjss@gmail.com
 # MY ORCID Profile:
 ## http://orcid.org/0000-0002-4994-0963
 
-<img src="/my_orcid_qrcode.png" width="358" height="532">
+<img src="/my_orcid_qrcode.png" width="100" height="100">
 
 
