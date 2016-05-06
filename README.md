@@ -29,3 +29,9 @@ My contact: njssnjss@gmail.com
 
 [![DOI](https://zenodo.org/badge/20295/njss/SpaceTimeCube3D.svg)](https://zenodo.org/badge/latestdoi/20295/njss/SpaceTimeCube3D)
 
+# MY ORCID Profile:
+## http://orcid.org/0000-0002-4994-0963
+
+<img src="/my_orcid_qrcode.png" width="358" height="532">
+
+
